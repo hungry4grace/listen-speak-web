@@ -76,7 +76,7 @@ let audioCtx = null;
 
 const ROOM_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#0ea5e9', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 const ROOM_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
-const PUBLIC_APP_ORIGIN = 'https://www.verserain.com';
+const PUBLIC_APP_ORIGIN = 'https://listenspeak.verserain.com';
 
 // Split a lobby tile caption into two balanced lines on the first natural
 // break. Without this, the auto-wrap leaves the final 「化。/年。/歡。」
@@ -271,7 +271,7 @@ function BindInviterModal({ t, personalCode, userEmail, setMyInviterCode, setToa
 
         {cameraDisabledInApp ? (
           <div style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', padding: '0.7rem 0.9rem', borderRadius: '10px', fontSize: '0.88rem', lineHeight: 1.45, marginBottom: '0.9rem' }}>
-            📱 {t('目前 App 版本不支援掃描，請在 Safari 開 verserain.com 掃描，或在下方手動貼上推薦碼。下次 App 更新後會自動可用。', 'This App version does not support scanning yet. Please open paragraphrain.com in Safari to scan, or paste the code below. Scanning will work after the next App update.')}
+            📱 {t('目前 App 版本不支援掃描，請在 Safari 開 listenspeak.verserain.com 掃描，或在下方手動貼上推薦碼。下次 App 更新後會自動可用。', 'This App version does not support scanning yet. Please open listenspeak.verserain.com in Safari to scan, or paste the code below. Scanning will work after the next App update.')}
           </div>
         ) : !scanning ? (
           <button
@@ -312,7 +312,7 @@ function BindInviterModal({ t, personalCode, userEmail, setMyInviterCode, setToa
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder={t('https://verserain.com/?ref=XXXXXXXXXX 或 XXXXXXXXXX', 'https://paragraphrain.com/?ref=XXXXXXXXXX or XXXXXXXXXX')}
+          placeholder={t('https://listenspeak.verserain.com/?ref=XXXXXXXXXX 或 XXXXXXXXXX', 'https://listenspeak.verserain.com/?ref=XXXXXXXXXX or XXXXXXXXXX')}
           style={{ width: '100%', padding: '0.7rem 0.85rem', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#1e293b', fontSize: '0.95rem', boxSizing: 'border-box' }}
         />
         <button
@@ -9173,11 +9173,11 @@ const zhcnDict = {
     "無法啟動相機。請改用手動輸入。": "无法启动相机。请改用手动输入。",
     "補上推薦碼": "补上推荐码",
     "掃描推薦人的 QR Code，或貼上邀請連結／10 字元推薦碼。下次過關時雙方都會獲得獎勵。": "扫描推荐人的 QR Code，或贴上邀请连结／10 字元推荐码。下次过关时双方都会获得奖励。",
-    "目前 App 版本不支援掃描，請在 Safari 開 verserain.com 掃描，或在下方手動貼上推薦碼。下次 App 更新後會自動可用。": "目前 App 版本不支援扫描，请在 Safari 开 verserain.com 扫描，或在下方手动贴上推荐码。下次 App 更新后会自动可用。",
+    "目前 App 版本不支援掃描，請在 Safari 開 listenspeak.verserain.com 掃描，或在下方手動貼上推薦碼。下次 App 更新後會自動可用。": "目前 App 版本不支援扫描，请在 Safari 开 listenspeak.verserain.com 扫描，或在下方手动贴上推荐码。下次 App 更新后会自动可用。",
     "掃描 QR Code": "扫描 QR Code",
     "停止掃描": "停止扫描",
     "或手動輸入": "或手动输入",
-    "https://verserain.com/?ref=XXXXXXXXXX 或 XXXXXXXXXX": "https://verserain.com/?ref=XXXXXXXXXX 或 XXXXXXXXXX",
+    "https://listenspeak.verserain.com/?ref=XXXXXXXXXX 或 XXXXXXXXXX": "https://listenspeak.verserain.com/?ref=XXXXXXXXXX 或 XXXXXXXXXX",
     "儲存": "储存",
     "（暱稱未提供）": "（暱称未提供）",
     "我的推薦人": "我的推荐人",
@@ -9354,7 +9354,7 @@ const zhcnDict = {
     "每日一首推播": "每日一首推播",
     "此瀏覽器不支援推播。請用桌面 Chrome / Edge / Firefox 或 Android Chrome 來啟用。": "此浏览器不支援推播。请用桌面 Chrome / Edge / Firefox 或 Android Chrome 来启用。",
     "iOS 需要先把 VerseRain 加到主畫面": "iOS 需要先把 VerseRain 加到主画面",
-    "用 Safari 打開 verserain.com（不要用 App）": "用 Safari 打开 verserain.com（不要用 App）",
+    "用 Safari 打開 listenspeak.verserain.com（不要用 App）": "用 Safari 打开 listenspeak.verserain.com（不要用 App）",
     "點下方分享圖示 → 加入主畫面": "点下方分享图示 → 加入主画面",
     "從主畫面點 VerseRain icon 打開": "从主画面点 VerseRain icon 打开",
     "再回到這頁開啟推播": "再回到这页开启推播",
@@ -13312,7 +13312,7 @@ const zhcnDict = {
                   <ul style={{ paddingLeft: '1.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <li>{t('學習多種語言的聖經內容！', 'Learn bible paragraphs in multiple languages!')}</li>
                     <li>{t('點擊單字時會有文字轉語音的朗讀功能，來加深您對內容背誦的印象。', 'Text to Speech verbal reading as you click the words to impress your memory on paragraph recitation.')}</li>
-                    <li>{t('透過 verserain，能支援近乎無限多的內容、內容集以及多種聖經譯本可以使用。', 'Through paragraphrain, it supports virtually unlimited number of paragraphs, collections, and multiple bible versions.')}</li>
+                    <li>{t('透過聽&說，能支援近乎無限多的內容、內容集以及多種聖經譯本可以使用。', 'Through Listen&Speak, it supports virtually unlimited number of paragraphs, collections, and multiple bible versions.')}</li>
                     <li>{t('提供多種挑戰難度，無論是小孩還是成人都非常適合來挑戰自己的極限。', 'Multiple difficulty levels offered to be played by kids to adults.')}</li>
                     <li>{t('挑戰模式有助於加強記憶同一個內容集中的多段相關內容。', 'Challenge mode helps to strengthen the memory of multiple related paragraphs in the same collection.')}</li>
                     <li>{t('線上排行榜能激勵會眾、青年團契和小組成員一起參與遊玩、共同精進！', 'Online Leaderboard to motivate congregation, youth fellowships and small group members to participate and improve together!')}</li>
@@ -14874,7 +14874,7 @@ const zhcnDict = {
                     {t('iOS 需要先把 VerseRain 加到主畫面', 'On iOS, add ParagraphRain to your Home Screen first')}
                   </p>
                   <ol style={{ margin: '0 0 0.3rem 1rem', padding: 0 }}>
-                    <li>{t('用 Safari 打開 verserain.com（不要用 App）', 'Open paragraphrain.com in Safari (not the App)')}</li>
+                    <li>{t('用 Safari 打開 listenspeak.verserain.com（不要用 App）', 'Open listenspeak.verserain.com in Safari (not the App)')}</li>
                     <li>{t('點下方分享圖示 → 加入主畫面', 'Tap Share → Add to Home Screen')}</li>
                     <li>{t('從主畫面點 VerseRain icon 打開', 'Open ParagraphRain from the Home Screen icon')}</li>
                     <li>{t('再回到這頁開啟推播', 'Come back here and turn on push')}</li>

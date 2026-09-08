@@ -4,7 +4,7 @@
 
 A bilingual listen / repeat / memorise app. Ships with the 300 Tang Poems; anyone can add their own text — Chinese and English side by side, paragraph by paragraph, in their own voice.
 
-- 正式站 / Live: https://listen-speak-web.vercel.app
+- 正式站 / Live: https://listenspeak.verserain.com
 - 後端 / Backend: PartyKit `listenspeak-party` (`src/party/server.js`)
 - 由 [VerseRain 經文雨](https://github.com/hungry4grace/verserain-web) 衍生 / derived from VerseRain
 
