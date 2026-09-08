@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Worship background">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2e1065"/><stop offset="0.55" stop-color="#7c3aed"/><stop offset="1" stop-color="#c026d3"/></linearGradient><radialGradient id="burst" cx="50%" cy="88%" r="55%"><stop offset="0" stop-color="#f5d0fe" stop-opacity="0.9"/><stop offset="0.55" stop-color="#d946ef" stop-opacity="0.35"/><stop offset="1" stop-color="#d946ef" stop-opacity="0"/></radialGradient></defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#burst)"/>
+  <g fill="#f5d0fe" opacity="0.35">
+    <path d="M800 900 L700 0 L760 0 L820 900 Z"/>
+    <path d="M800 900 L940 40 L1000 60 L860 900 Z"/>
+    <path d="M800 900 L520 80 L580 50 L840 900 Z"/>
+    <path d="M800 900 L1180 160 L1230 200 L860 900 Z"/>
+    <path d="M800 900 L360 260 L400 210 L840 900 Z"/>
+  </g>
+</svg>

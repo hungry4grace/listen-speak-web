@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Nature background">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0ea5e9"/><stop offset="0.6" stop-color="#7dd3fc"/><stop offset="1" stop-color="#ecfccb"/></linearGradient><linearGradient id="river" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bae6fd"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <path d="M0 560 L320 300 L640 560 Z" fill="#166534" opacity="0.85"/>
+  <path d="M420 600 L820 260 L1240 600 Z" fill="#15803d" opacity="0.9"/>
+  <path d="M1000 620 L1360 340 L1600 560 L1600 640 Z" fill="#166534" opacity="0.8"/>
+  <ellipse cx="800" cy="1000" rx="1200" ry="300" fill="#4d7c0f" opacity="0.9"/>
+  <path d="M700 900 C 760 780 900 740 1050 700 C 1180 668 1290 660 1400 664 L1400 900 Z" fill="url(#river)" opacity="0.85"/>
+</svg>

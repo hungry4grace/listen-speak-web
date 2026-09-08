@@ -1,0 +1,24 @@
+{
+  "buildCommand": "npm install --include=dev && npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "installCommand": "npm install --include=dev",
+  "rewrites": [
+    {
+      "source": "/privacy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/privacy/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/delete-account/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}

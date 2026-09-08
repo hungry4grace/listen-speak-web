@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Harvest background">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="0.55" stop-color="#fcd34d"/><stop offset="1" stop-color="#fef3c7"/></linearGradient><linearGradient id="field" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d97706"/><stop offset="1" stop-color="#92400e"/></linearGradient></defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1200" cy="240" r="86" fill="#fff7ed" opacity="0.95"/>
+  <rect y="600" width="1600" height="300" fill="url(#field)"/>
+  <g stroke="#78350f" stroke-width="6" fill="none" opacity="0.85">
+    <path d="M240 900 V 660 M240 700 q-40 -30 -44 -70 M240 700 q40 -30 44 -70 M240 760 q-36 -26 -40 -62 M240 760 q36 -26 40 -62"/>
+    <path d="M480 900 V 620 M480 660 q-40 -30 -44 -70 M480 660 q40 -30 44 -70 M480 720 q-36 -26 -40 -62 M480 720 q36 -26 40 -62"/>
+    <path d="M720 900 V 650 M720 690 q-40 -30 -44 -70 M720 690 q40 -30 44 -70 M720 750 q-36 -26 -40 -62 M720 750 q36 -26 40 -62"/>
+  </g>
+</svg>

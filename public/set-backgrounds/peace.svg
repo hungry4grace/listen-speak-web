@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Peace background">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f172a"/><stop offset="0.6" stop-color="#1e3a8a"/><stop offset="1" stop-color="#334155"/></linearGradient><linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e40af"/><stop offset="1" stop-color="#0f172a"/></linearGradient></defs>
+
+  <rect width="1600" height="620" fill="url(#sky)"/>
+  <rect y="620" width="1600" height="280" fill="url(#sea)"/>
+  <circle cx="1120" cy="250" r="70" fill="#e2e8f0" opacity="0.95"/>
+  <g stroke="#cbd5e1" opacity="0.5">
+    <line x1="1040" y1="660" x2="1200" y2="660" stroke-width="5"/>
+    <line x1="1070" y1="700" x2="1180" y2="700" stroke-width="4"/>
+    <line x1="1050" y1="745" x2="1190" y2="745" stroke-width="3"/>
+    <line x1="1085" y1="790" x2="1165" y2="790" stroke-width="3"/>
+  </g>
+  <circle cx="360" cy="160" r="3" fill="#fff" opacity="0.7"/>
+  <circle cx="520" cy="90" r="2.5" fill="#fff" opacity="0.6"/>
+  <circle cx="700" cy="200" r="2" fill="#fff" opacity="0.5"/>
+</svg>

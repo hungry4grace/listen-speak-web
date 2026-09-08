@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="DailyVerse background 21: rainbow-cove">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="hsl(163, 56%, 25%)"/>
+      <stop offset="0.44" stop-color="hsl(215, 78%, 54%)"/>
+      <stop offset="1" stop-color="hsl(13, 64%, 13%)"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="70%" cy="24%" r="44%">
+      <stop offset="0" stop-color="hsl(235, 100%, 82%)" stop-opacity="0.94"/>
+      <stop offset="0.38" stop-color="hsl(235, 92%, 62%)" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="hsl(13, 62%, 12%)" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="river" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="hsl(215, 88%, 78%)" stop-opacity="0.78"/>
+      <stop offset="0.54" stop-color="hsl(163, 82%, 48%)" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="hsl(13, 74%, 15%)" stop-opacity="0.96"/>
+    </linearGradient>
+    <filter id="soften"><feGaussianBlur stdDeviation="10"/></filter>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 0.08"/></feComponentTransfer></filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#sun)"/>
+  <g transform="">
+    <circle cx="948.4" cy="253.2" r="1.8" fill="white" opacity="0.22"/><circle cx="356.4" cy="411.8" r="1.6" fill="white" opacity="0.22"/><circle cx="833.5" cy="127.0" r="2.1" fill="white" opacity="0.22"/><circle cx="281.6" cy="340.5" r="1.6" fill="white" opacity="0.22"/><circle cx="786.6" cy="481.5" r="2.3" fill="white" opacity="0.22"/><circle cx="848.7" cy="390.3" r="1.6" fill="white" opacity="0.22"/><circle cx="1390.2" cy="416.9" r="1.5" fill="white" opacity="0.22"/><circle cx="500.8" cy="353.1" r="1.0" fill="white" opacity="0.22"/><circle cx="839.6" cy="150.6" r="1.2" fill="white" opacity="0.22"/><circle cx="749.3" cy="472.5" r="0.8" fill="white" opacity="0.22"/><circle cx="1283.2" cy="56.4" r="1.1" fill="white" opacity="0.22"/><circle cx="869.0" cy="209.3" r="0.9" fill="white" opacity="0.22"/><circle cx="1316.8" cy="265.9" r="1.0" fill="white" opacity="0.22"/><circle cx="492.7" cy="410.4" r="1.9" fill="white" opacity="0.22"/><circle cx="379.0" cy="364.9" r="2.1" fill="white" opacity="0.22"/><circle cx="101.0" cy="181.5" r="0.9" fill="white" opacity="0.22"/>
+    <path d="M900 188 L1600 68 L1600 270 L930 350 Z" fill="white" opacity="0.16" filter="url(#soften)"/><path d="M900 160 L1600 40 L1600 254 L930 334 Z" fill="white" opacity="0.08" filter="url(#soften)"/><path d="M900 117 L1600 0 L1600 220 L930 300 Z" fill="white" opacity="0.13" filter="url(#soften)"/><path d="M900 219 L1600 99 L1600 316 L930 396 Z" fill="white" opacity="0.12" filter="url(#soften)"/>
+    <path d="M0 545 C210 420 370 420 540 520 C720 630 820 390 1000 475 C1220 578 1400 398 1600 380 L1600 900 L0 900 Z" fill="hsl(13, 55%, 18%)" opacity="0.72"/>
+    <path d="M0 636 C230 495 405 530 590 620 C760 704 910 505 1095 595 C1265 674 1415 550 1600 575 L1600 900 L0 900 Z" fill="hsl(163, 54%, 19%)" opacity="0.70"/>
+    <path d="M734 900 C764 748 799 650 874 548 C944 650 984 770 1074 900 Z" fill="url(#river)" opacity="0.92"/>
+    <path d="M762 900 C806 780 844 678 884 590 C932 690 976 805 1039 900 Z" fill="white" opacity="0.17" filter="url(#soften)"/>
+    <g opacity="0.5" fill="hsl(13, 52%, 12%)"><path d="M122 760 l42 -115 l40 115z"/><rect x="158" y="735" width="13" height="80"/><path d="M1388 746 l58 -162 l55 162z"/><rect x="1436" y="710" width="16" height="100"/></g>
+  </g>
+  <rect width="1600" height="900" filter="url(#grain)" opacity="0.5"/>
+</svg>

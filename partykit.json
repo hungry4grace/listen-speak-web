@@ -1,0 +1,5 @@
+{
+  "name": "listenspeak-party",
+  "main": "src/party/server.js",
+  "compatibilityDate": "2026-05-16"
+}

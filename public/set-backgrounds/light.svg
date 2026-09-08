@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Light background">
+  <defs><radialGradient id="core" cx="50%" cy="46%" r="70%"><stop offset="0" stop-color="#fffbeb"/><stop offset="0.3" stop-color="#fde047"/><stop offset="0.65" stop-color="#f59e0b"/><stop offset="1" stop-color="#b45309"/></radialGradient></defs>
+
+  <rect width="1600" height="900" fill="url(#core)"/>
+  <g fill="#fffbeb" opacity="0.45">
+    <path d="M800 414 L60 120 L90 80 L810 400 Z"/>
+    <path d="M800 414 L1520 100 L1550 150 L812 402 Z"/>
+    <path d="M800 414 L780 -60 L840 -60 L820 400 Z"/>
+    <path d="M800 414 L200 860 L170 810 L790 420 Z"/>
+    <path d="M800 414 L1420 850 L1450 800 L812 420 Z"/>
+  </g>
+</svg>

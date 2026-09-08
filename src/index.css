@@ -1,0 +1,1836 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+Myanmar:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+TC:wght@400;700&display=swap');
+
+:root {
+  --primary-glow: #3b82f6;
+  --bg-gradient: linear-gradient(180deg, #0d1321 0%, #1e293b 100%);
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --app-font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', YuGothic, 'Noto Sans JP', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Noto Sans Myanmar', 'Noto Sans Hebrew', 'Vazirmatn', 'PingFang SC', 'PingFang TC', 'Hiragino Sans GB', 'Noto Sans SC', 'Noto Sans TC', 'Microsoft YaHei', 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  --control-font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', YuGothic, 'Noto Sans JP', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Noto Sans Myanmar', 'Noto Sans Hebrew', 'Vazirmatn', 'PingFang SC', 'PingFang TC', 'Hiragino Sans GB', 'Noto Sans SC', 'Noto Sans TC', 'Microsoft YaHei', 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+  --game-safe-top: max(env(safe-area-inset-top), 44px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: var(--app-font-family);
+  background: var(--bg-gradient);
+  color: white;
+  overflow: hidden; /* game canvas */
+  height: 100vh;
+  width: 100vw;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--control-font-family);
+}
+
+.hud-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+}
+
+/* Animations */
+@keyframes fall {
+  0% { transform: translateY(-100px); opacity: 0; }
+  5% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(110vh); opacity: 0; }
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 35px rgba(59, 130, 246, 0.8); }
+  100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+}
+
+@keyframes shakeError {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+
+.falling-block-inner {
+  position: relative;
+  cursor: pointer;
+  padding: 12px 24px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  border-radius: 20px; /* softer rounded block instead of pill */
+  background: linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.3) 100%);
+  color: #1e293b;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 6px 0px rgba(0, 0, 0, 0.3), 0 10px 20px rgba(0,0,0,0.2), inset 0 2px 2px rgba(255, 255, 255, 0.8);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
+  user-select: none;
+}
+
+.falling-block-inner:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 10px 0px rgba(0, 0, 0, 0.3), 0 15px 30px rgba(59, 130, 246, 0.4), inset 0 2px 2px rgba(255, 255, 255, 0.9);
+  background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.5) 100%);
+}
+
+.falling-block-inner:active {
+  transform: translateY(6px) scale(0.98);
+  box-shadow: 0 0px 0px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.error-shake {
+  animation: shakeError 0.4s ease-in-out !important;
+  background: rgba(239, 68, 68, 0.4) !important;
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.6) !important;
+}
+
+/* Background elements */
+.bg-layer {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  background-image: radial-gradient(circle at 50% 120%, #1e3a8a 0%, transparent 60%);
+  transition: all 1s ease-in-out;
+}
+
+.bg-layer.golden-bg {
+  background-image: radial-gradient(circle at 50% 120%, #78350f 0%, #1e3a8a 70%, transparent 100%);
+}
+
+.rain-system.golden-rain {
+  filter: sepia(1) hue-rotate(-30deg) saturate(3) brightness(1.2) drop-shadow(0 0 5px rgba(255, 215, 0, 0.5));
+  transition: filter 1s ease-in-out;
+}
+
+/* Upward floating particles (Seeds of life) */
+.particles-system {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  bottom: -20px;
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 240, 180, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.4);
+  animation: floatUp var(--duration, 8s) ease-in infinite;
+  opacity: 0;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(0) translateX(0) scale(0.5); opacity: 0; }
+  20% { opacity: var(--max-opacity, 0.8); transform: translateY(-20vh) translateX(calc(var(--drift, 20px) * 0.2)) scale(1); }
+  80% { opacity: var(--max-opacity, 0.8); }
+  100% { transform: translateY(-120vh) translateX(var(--drift, 20px)) scale(0.8); opacity: 0; }
+}
+
+#root { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+
+@keyframes flashSuccess {
+  0% { transform: scale(1); background: rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); box-shadow: 0 0 20px rgba(34, 197, 94, 0.6); }
+  60% { transform: scale(1.15); background: rgba(34, 197, 94, 0.9); border-color: #fff; box-shadow: 0 0 40px rgba(34, 197, 94, 1); }
+  100% { transform: scale(0.5); opacity: 0; }
+}
+
+.success-flash {
+  animation: flashSuccess 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+/* Parallax Rain Effect with Wind Sway */
+.rain-system {
+  position: absolute;
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  pointer-events: none;
+  z-index: -2;
+  animation: windBreeze 12s cubic-bezier(0.4, 0.0, 0.2, 1) infinite alternate;
+}
+
+@keyframes windBreeze {
+  0%   { transform: rotate(8deg); }
+  35%  { transform: rotate(18deg) scale(1.05); } 
+  70%  { transform: rotate(12deg); }
+  100% { transform: rotate(26deg) scale(1.1); } 
+}
+
+.rain-layer {
+  position: absolute;
+  top: -100%; left: 0; width: 100%; height: 300%;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect x="15" y="5" width="1.5" height="30" fill="rgba(255,255,255,0.4)"/><rect x="65" y="45" width="1" height="20" fill="rgba(255,255,255,0.2)"/></svg>');
+  background-repeat: repeat;
+  will-change: transform;
+}
+
+.rain-layer.front {
+  background-size: 150px 150px;
+  animation: fallFront 0.3s linear infinite;
+  opacity: 0.8;
+}
+.rain-layer.mid {
+  background-size: 100px 100px;
+  animation: fallMid 0.45s linear infinite;
+  opacity: 0.5;
+}
+.rain-layer.back {
+  background-size: 60px 60px;
+  animation: fallBack 0.7s linear infinite;
+  opacity: 0.3;
+}
+
+@keyframes fallFront { 0% { transform: translateY(0); } 100% { transform: translateY(150px); } }
+@keyframes fallMid { 0% { transform: scaleX(-1) translateY(0); } 100% { transform: scaleX(-1) translateY(100px); } }
+@keyframes fallBack { 0% { transform: translateY(0); } 100% { transform: translateY(60px); } }
+
+/* Lightning */
+.lightning-flash {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: white;
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0;
+}
+
+.lightning-flash.active {
+  animation: lightning 0.5s ease-out forwards;
+}
+
+@keyframes lightning {
+  0% { opacity: 0; }
+  10% { opacity: 0.8; }
+  20% { opacity: 0; }
+  35% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+.lightning-flash.heavy {
+  animation: lightningHeavy 1.2s ease-out forwards;
+}
+
+@keyframes lightningHeavy {
+  0% { opacity: 0; }
+  5% { opacity: 0.9; }
+  10% { opacity: 0; }
+  15% { opacity: 1; }
+  25% { opacity: 0; }
+  30% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+@keyframes fadeInUp {
+  0% { transform: translate(-50%, 20px); opacity: 0; }
+  100% { transform: translate(-50%, 0); opacity: 1; }
+}
+
+@keyframes flyToStack {
+  0% { transform: translate(var(--startX), var(--startY)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--endX), var(--endY)) scale(0.6); opacity: 0; }
+}
+
+.flying-block-anim {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 1000;
+  animation: flyToStack 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+  pointer-events: none;
+}
+
+/* ReactQuill overrides */
+.ql-editor,
+.ql-editor-content,
+.ql-editor-content * {
+  font-family: var(--app-font-family) !important;
+}
+
+.ql-editor {
+  font-size: 20px !important;
+}
+
+/* Fancy Tooltips */
+.fancy-tooltip-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.fancy-tooltip-container .fancy-tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px) scale(0.95);
+  margin-bottom: 8px;
+  padding: 0.6rem 1.2rem;
+  background: #1e293b;
+  color: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: bold;
+  white-space: pre-wrap;
+  min-width: max-content;
+  max-width: 250px;
+  text-align: center;
+  z-index: 9999;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.fancy-tooltip-container .fancy-tooltip-text::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
+}
+.fancy-tooltip-container:hover .fancy-tooltip-text {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+
+/* Joyful Blocks & Animations */
+.block-tile {
+  box-shadow: 0 4px 0px rgba(0,0,0,0.15);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.block-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 4px rgba(0,0,0,0.15);
+}
+.block-tile:active {
+  transform: translateY(2px);
+  box-shadow: 0 0px 0px rgba(0,0,0,0);
+}
+
+.primary-button {
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.primary-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+}
+.primary-button:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+
+/* Performance Mode overrides */
+.performance-mode .rain-system {
+  display: none !important;
+}
+
+.performance-mode .bg-layer {
+  animation: none !important;
+  transition: none !important;
+  background-image: radial-gradient(circle at 50% 120%, #1e3a8a 0%, transparent 60%) !important;
+}
+
+.performance-mode .particles-system {
+  display: none !important;
+}
+
+.performance-mode .lightning-flash {
+  display: none !important;
+}
+
+/* Garden UI Enhancements */
+@keyframes gentle-sway {
+  0% { transform: rotateZ(45deg) rotateX(-60deg) rotate(-2deg); }
+  50% { transform: rotateZ(45deg) rotateX(-60deg) rotate(4deg); }
+  100% { transform: rotateZ(45deg) rotateX(-60deg) rotate(-2deg); }
+}
+
+.garden-item {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  transform: rotateZ(45deg) rotateX(-60deg);
+  transform-origin: bottom center;
+}
+
+.garden-item:hover {
+  filter: brightness(1.1) drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+  transform: rotateZ(45deg) rotateX(-60deg) translateY(-10px) scale(1.1);
+  z-index: 99;
+}
+
+/* Square Grid Container Responsive Layout */
+.game-hud {
+  --game-hud-height: clamp(4.75rem, 10vh, 7.25rem);
+}
+
+.square-grid-container {
+  position: absolute;
+  top: clamp(4.75rem, 10vh, 7.25rem);
+  left: 0;
+  right: 0;
+  bottom: clamp(4.5rem, 9vh, 6.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.45rem, 1.4vmin, 1rem);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.square-grid-inner {
+  margin: 0 auto;
+  min-height: 0;
+}
+
+.square-block-tile {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  line-height: 1.12;
+  letter-spacing: 0;
+  overflow: hidden;
+}
+
+.game-hud-row,
+.game-hud-chip,
+.game-hud-reference,
+.game-next-bar,
+.game-next-panel,
+.game-next-text {
+  min-width: 0;
+}
+
+.versesets-pagination {
+  background: #ffffff;
+  min-width: 0;
+}
+
+.versesets-page-scroll {
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.versesets-page-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.versesets-page-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.versesets-page-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+/* Default styles for portrait or large screens */
+.landscape-compact-header {
+  padding: calc(env(safe-area-inset-top) + 1rem) max(2rem, env(safe-area-inset-right)) 1rem max(2rem, env(safe-area-inset-left));
+}
+.landscape-compact-nav {
+  padding: 0.8rem 1rem;
+}
+.landscape-compact-content {
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+@media (orientation: landscape) and (max-height: 800px) {
+  .square-grid-container {
+    top: 64px !important;
+    bottom: 72px !important;
+    padding: 8px 10px !important;
+    justify-content: center !important;
+  }
+  .square-grid-inner {
+    margin: 0 auto !important;
+  }
+  .landscape-compact-header {
+    padding: 0.2rem 1rem !important;
+  }
+  .landscape-compact-nav {
+    padding: 0.4rem 1rem !important;
+  }
+  .landscape-compact-content {
+    margin: 0.5rem auto !important;
+    padding: 0 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.45rem 0.55rem !important;
+    align-items: start !important;
+    padding: max(calc(env(safe-area-inset-top) + 0.85rem), 3.35rem) max(0.85rem, env(safe-area-inset-right)) 0.7rem max(0.85rem, env(safe-area-inset-left)) !important;
+    min-height: calc(env(safe-area-inset-top) + 6.25rem);
+  }
+
+  /* Span the full header width so the version + voice controls (which wrap
+     onto their own line below the brand) can use the whole row instead of
+     being squeezed into column 1 by a wide, logged-in account column. The
+     account actions are pinned to the top-right cell and layer on top via
+     z-index, sitting over the empty right side of the brand line. */
+  .app-header-primary {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.55rem !important;
+  }
+
+  .app-brand-lockup {
+    flex: 1 1 100%;
+    min-width: 6.7rem;
+  }
+
+  /* Language picker + voice select share one row below the brand. */
+  .app-lang-control {
+    order: 2;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .app-lang-control .app-language-select {
+    width: 100% !important;
+    max-width: none !important;
+  }
+  select.app-language-select {
+    flex: 1 1 0;
+    width: auto !important;
+    min-width: 0;
+    max-width: none !important;
+  }
+
+  .app-brand-wordmark {
+    font-size: clamp(1.7rem, 9.2vw, 2.25rem) !important;
+    line-height: 0.9 !important;
+  }
+
+  .app-brand-version {
+    font-size: 0.62rem !important;
+    margin-top: 0.3rem !important;
+  }
+
+  .app-language-select {
+    order: 2;
+    width: min(12.6rem, 100%) !important;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 0.45rem 0.65rem !important;
+    font-size: 0.95rem !important;
+    touch-action: manipulation;
+  }
+
+  .app-auth-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+    flex: 0 0 auto;
+    gap: 0.45rem !important;
+    padding-top: 0.05rem;
+    white-space: nowrap;
+    z-index: 2;
+  }
+
+  .app-login-link,
+  .app-signup-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+
+  .app-login-link {
+    padding: 0.35rem 0.2rem !important;
+    font-size: 1rem !important;
+  }
+
+  .app-signup-link {
+    padding: 0.45rem 0.65rem !important;
+    border-radius: 8px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .landscape-compact-nav {
+    padding: 0.7rem max(0.85rem, env(safe-area-inset-right)) 0.75rem max(0.85rem, env(safe-area-inset-left)) !important;
+    gap: 0.7rem !important;
+    scroll-padding-inline: max(0.85rem, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 380px) {
+  .app-shell-header {
+    grid-template-columns: 1fr;
+  }
+
+  .app-auth-actions {
+    grid-column: 1;
+    justify-self: start;
+    grid-row: 2;
+  }
+
+  .app-language-select {
+    width: min(13.5rem, 100%) !important;
+  }
+}
+
+@media (max-width: 900px), (max-height: 520px) {
+  .versesets-table-card {
+    overflow-x: auto;
+  }
+
+  .versesets-pagination {
+    position: sticky;
+    left: 0;
+    width: calc(100vw - 2rem);
+    max-width: 100%;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 0.35rem !important;
+    padding: 0.85rem 0.5rem !important;
+  }
+
+  .versesets-page-step {
+    min-width: 42px;
+    padding: 0.55rem 0.65rem !important;
+    font-size: 0.9rem;
+  }
+
+  .versesets-page-step-label {
+    display: none;
+  }
+
+  .versesets-page-button {
+    min-width: 42px !important;
+    padding: 0.55rem 0.75rem !important;
+  }
+
+  .versesets-page-scroll {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow-x: visible !important;
+    padding: 0.35rem 0.15rem !important;
+    scroll-snap-type: none !important;
+  }
+
+  .versesets-page-select-wrap {
+    padding-top: 0.15rem;
+  }
+
+  .game-hud {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: auto auto !important;
+    gap: 0.2rem !important;
+    align-items: stretch !important;
+    padding: calc(var(--game-safe-top) + 0.35rem) max(0.35rem, env(safe-area-inset-right)) 0 max(0.35rem, env(safe-area-inset-left)) !important;
+  }
+
+  .game-hud-left {
+    order: 1;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100%;
+    flex-wrap: nowrap !important;
+    gap: 0.35rem !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 0.1rem;
+    scrollbar-width: none;
+  }
+
+  .game-hud-left::-webkit-scrollbar {
+    display: none;
+  }
+
+  .game-hud-right {
+    order: 1;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    justify-self: end !important;
+    align-self: start;
+    margin-left: auto;
+  }
+
+  .game-hud-chip {
+    min-height: 34px !important;
+    flex: 0 0 auto;
+    border-radius: 10px !important;
+    padding: 0.35rem 0.55rem !important;
+  }
+
+  .game-exit-button {
+    width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+  }
+
+  .game-demo-button {
+    height: 42px !important;
+    padding: 0.35rem 0.6rem !important;
+  }
+
+  .game-status-chip,
+  .game-score-chip,
+  .game-multiplayer-chip {
+    height: 42px !important;
+  }
+
+  .game-score-chip {
+    padding-right: 0.7rem !important;
+  }
+
+  .game-timer-chip {
+    height: 42px !important;
+    min-width: 112px;
+    justify-content: center;
+    margin-left: 0.35rem;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  .game-hud-reference {
+    order: 2;
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    justify-self: center !important;
+    align-self: center !important;
+    width: fit-content;
+    max-width: calc(100vw - 1rem);
+    min-height: 40px !important;
+    padding: 0.25rem 0.85rem !important;
+    border-radius: 12px !important;
+  }
+
+  .game-hud-reference span {
+    font-size: clamp(2.1rem, 8.4vw, 3.8rem) !important;
+  }
+
+  .square-grid-container {
+    top: calc(var(--game-safe-top) + 6.2rem) !important;
+    bottom: calc(env(safe-area-inset-bottom) + 4.55rem) !important;
+    padding: 0.3rem !important;
+    justify-content: center !important;
+  }
+
+  .square-grid-inner {
+    width: min(99vw, 1600px) !important;
+    gap: clamp(0.35rem, 1.3vmin, 0.85rem) !important;
+  }
+
+  .square-block-tile {
+    border-radius: clamp(12px, 2vmin, 22px) !important;
+    padding: clamp(0.45rem, 1.7vmin, 1.25rem) !important;
+  }
+
+  .game-next-panel {
+    padding: 0.35rem max(0.6rem, env(safe-area-inset-right)) calc(0.45rem + env(safe-area-inset-bottom)) max(0.6rem, env(safe-area-inset-left)) !important;
+    border-radius: 12px 12px 0 0 !important;
+  }
+
+  .game-next-text {
+    font-size: clamp(0.95rem, 3.6vw, 1.25rem) !important;
+    line-height: 1.35 !important;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --game-safe-top: max(env(safe-area-inset-top), 12px);
+  }
+
+  .game-hud {
+    padding-top: calc(var(--game-safe-top) + 0.2rem) !important;
+    gap: 0.12rem !important;
+  }
+
+  .game-hud-left {
+    gap: 0.3rem !important;
+  }
+
+  .game-hud-chip {
+    min-height: 30px !important;
+    height: 34px !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  .game-exit-button,
+  .game-demo-button {
+    height: 34px !important;
+  }
+
+  .game-exit-button {
+    width: 36px !important;
+  }
+
+  .game-timer-chip {
+    min-width: 104px;
+    margin-left: 0.3rem;
+  }
+
+  .game-hud-reference {
+    min-height: 34px !important;
+    padding: 0.18rem 0.75rem !important;
+  }
+
+  .game-hud-reference span {
+    font-size: clamp(1.85rem, 7vh, 2.8rem) !important;
+  }
+
+  .square-grid-container {
+    top: calc(var(--game-safe-top) + 4.85rem) !important;
+    bottom: calc(env(safe-area-inset-bottom) + 2.75rem) !important;
+    padding: 0.2rem 0.35rem !important;
+  }
+
+  .square-grid-inner {
+    width: min(99vw, 1700px) !important;
+    gap: clamp(0.25rem, 1.1vmin, 0.65rem) !important;
+  }
+
+  .game-next-panel {
+    padding-top: 0.22rem !important;
+    padding-bottom: calc(0.25rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .game-next-text {
+    font-size: clamp(0.85rem, 3.5vh, 1.05rem) !important;
+    line-height: 1.2 !important;
+  }
+}
+
+.privacy-page {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.18), transparent 32rem),
+    linear-gradient(180deg, #f8fbff 0%, #eef4fb 48%, #f8fafc 100%);
+  color: #172033;
+  font-family: var(--app-font-family);
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.privacy-hero,
+.privacy-grid,
+.privacy-content {
+  width: min(1060px, 100%);
+  margin: 0 auto;
+}
+
+.privacy-hero {
+  padding: clamp(2rem, 7vw, 5rem) 0 clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.privacy-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+  font-weight: 900;
+}
+
+.privacy-kicker {
+  margin: 2.5rem 0 0.75rem;
+  color: #0f766e;
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.privacy-hero h1 {
+  max-width: 850px;
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(2.25rem, 7vw, 5rem);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.privacy-lede {
+  max-width: 760px;
+  margin: 1.4rem 0 0;
+  color: #475569;
+  font-size: clamp(1.05rem, 2.3vw, 1.35rem);
+  line-height: 1.65;
+}
+
+.privacy-updated {
+  margin-top: 1.3rem;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.privacy-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.85rem;
+  margin-bottom: clamp(1.2rem, 4vw, 2.5rem);
+}
+
+.privacy-grid article,
+.privacy-section,
+.privacy-contact {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.privacy-grid article {
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.privacy-grid svg {
+  color: #2563eb;
+}
+
+.privacy-grid h2 {
+  margin: 0.75rem 0 0.35rem;
+  color: #0f172a;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.privacy-grid p,
+.privacy-section p,
+.privacy-section li,
+.privacy-contact p {
+  color: #475569;
+  line-height: 1.72;
+}
+
+.privacy-grid p {
+  margin: 0;
+  font-size: 0.93rem;
+}
+
+.privacy-content {
+  display: grid;
+  gap: 0.9rem;
+  padding-bottom: 4rem;
+}
+
+.privacy-section,
+.privacy-contact {
+  border-radius: 8px;
+  padding: clamp(1.15rem, 3vw, 1.8rem);
+}
+
+.privacy-section h2,
+.privacy-contact h2 {
+  margin: 0 0 0.65rem;
+  color: #0f172a;
+  font-size: clamp(1.18rem, 2.5vw, 1.45rem);
+}
+
+.privacy-section p,
+.privacy-contact p {
+  margin: 0.45rem 0 0;
+}
+
+.privacy-section ul {
+  margin: 0.7rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.privacy-section li + li {
+  margin-top: 0.4rem;
+}
+
+.privacy-contact {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.privacy-contact svg {
+  flex: 0 0 auto;
+  color: #2563eb;
+  margin-top: 0.15rem;
+}
+
+.privacy-contact a {
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.daily-verse-rain-shell {
+  display: grid;
+  /* Single column that can shrink below its content's max-content width.
+     Without minmax(0, 1fr) the implicit grid column sizes to the widest child
+     (e.g. the 歡迎使用經文雨 setup card / action rows), pushing the shell wider
+     than the phone viewport and spilling off-screen. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.8rem;
+  width: 100%;
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.daily-verse-rain-shell.rain-font-small { font-size: 13px; }
+.daily-verse-rain-shell.rain-font-normal { font-size: 16px; }
+.daily-verse-rain-shell.rain-font-large { font-size: 20px; }
+.daily-verse-rain-shell.rain-font-xlarge { font-size: 24px; }
+
+.daily-verse-rain-empty {
+  min-height: 280px;
+  place-items: center;
+  border-radius: 8px;
+  background: #0f172a;
+}
+
+.daily-verse-rain-scene {
+  position: relative;
+  min-height: min(72vh, 680px);
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  background:
+    radial-gradient(circle at 50% 12%, rgba(191, 219, 254, 0.55), transparent 38%),
+    linear-gradient(135deg, #8fb3b2 0%, #475569 48%, #111827 100%);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+  isolation: isolate;
+}
+
+.daily-verse-rain-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.02);
+  filter: saturate(1.08) contrast(1.04) brightness(0.92);
+}
+
+.daily-verse-rain-sky,
+.daily-verse-rain-glow,
+.daily-verse-rain-drops {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.daily-verse-rain-sky {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0.52)),
+    radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.28), transparent 28%),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.16), transparent 34%, rgba(16, 185, 129, 0.12));
+  z-index: 1;
+}
+
+.daily-verse-rain-sky.has-ai-image {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.28)),
+    radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.12), transparent 30%);
+}
+
+.daily-verse-rain-glow {
+  background: linear-gradient(0deg, rgba(15, 23, 42, 0.42), transparent 42%);
+  z-index: 2;
+}
+
+.daily-verse-rain-drops {
+  z-index: 3;
+  overflow: hidden;
+}
+
+.daily-verse-rain-drops span {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--drop-width);
+  height: var(--drop-length);
+  border-radius: 999px;
+  opacity: var(--drop-opacity);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(224, 242, 254, 0.92));
+  filter: blur(var(--drop-blur));
+  box-shadow: 0 0 8px rgba(191, 219, 254, 0.18);
+  animation: dailyVerseRainFall var(--drop-duration) linear infinite;
+  animation-delay: var(--drop-delay);
+}
+
+.daily-verse-rain-drops span.depth-1 {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(191, 219, 254, 0.52));
+}
+
+.daily-verse-rain-drops span.depth-3 {
+  box-shadow: 0 0 12px rgba(219, 234, 254, 0.28);
+}
+
+@keyframes dailyVerseRainFall {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(var(--drop-drift), 126vh, 0); }
+}
+
+.daily-verse-rain-content {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  min-height: min(72vh, 680px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.1rem;
+  padding: clamp(1.2rem, 5vw, 4rem) clamp(1rem, 4vw, 3rem) 7rem;
+  text-align: center;
+}
+
+.daily-verse-rain-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.daily-verse-rain-topbar > div {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+}
+
+.daily-verse-rain-topbar button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.46);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  backdrop-filter: blur(12px);
+}
+
+.daily-verse-rain-topbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.daily-verse-rain-date {
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  background: rgba(15, 23, 42, 0.38);
+  color: #dbeafe;
+  font-size: 0.84em;
+  font-weight: 900;
+  backdrop-filter: blur(12px);
+}
+
+.daily-verse-rain-content h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.35em, 4vw, 2.5em);
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 4px 16px rgba(0, 0, 0, 0.75),
+    0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.daily-verse-rain-phrases {
+  display: flex;
+  max-width: 820px;
+  min-height: 210px;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 0.6rem 0.72rem;
+}
+
+/* Boxless phrases: white type with a lower-right black drop shadow (a crisp
+   offset plus a soft spread so it stays readable on bright backgrounds). */
+.daily-verse-rain-phrases span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.45rem;
+  padding: 0.45rem 0.7rem;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(1em, 2.8vw, 1.45em);
+  font-weight: 800;
+  line-height: 1.45;
+  text-shadow: 0.06em 0.08em 2px rgba(0, 0, 0, 0.9), 0.14em 0.18em 12px rgba(0, 0, 0, 0.55);
+  transform: translate3d(var(--drift), -52vh, 0);
+  opacity: 0;
+  transition: transform 1.65s cubic-bezier(.22, .82, .24, 1), opacity 0.55s ease, color 0.24s ease, text-shadow 0.24s ease;
+}
+
+.daily-verse-rain-phrases span.is-active {
+  color: #ffffff;
+  /* Same lower-right shadow + a warm glow so the phrase being read stands out. */
+  text-shadow: 0.06em 0.08em 2px rgba(0, 0, 0, 0.9), 0.14em 0.18em 12px rgba(0, 0, 0, 0.55), 0 0 26px rgba(250, 204, 21, 0.65);
+}
+
+.daily-verse-rain-phrases span.has-landed,
+.daily-verse-rain-phrases span.is-active,
+.daily-verse-rain-phrases.is-settled span {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+.daily-verse-rain-actions {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 1.2rem;
+  display: flex;
+  width: min(92%, 480px);
+  transform: translateX(-50%);
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.daily-verse-rain-actions button,
+.daily-verse-rain-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.rain-font-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.rain-font-controls button {
+  min-width: 40px;
+  min-height: 32px;
+  border-radius: 999px;
+  padding: 0.35rem 0.55rem;
+  background: #f8fafc;
+  color: #334155;
+  border-color: transparent;
+}
+
+.rain-font-controls button.is-on {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.rain-font-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.daily-verse-rain-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0.58rem 0.62rem;
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
+  font-size: 0.94rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.daily-verse-rain-actions button svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.daily-verse-rain-actions button:nth-child(2) {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.daily-verse-rain-actions button:disabled {
+  cursor: wait;
+  opacity: 0.82;
+}
+
+.daily-verse-rain-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.daily-verse-rain-controls span {
+  align-self: center;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.daily-verse-rain-controls button {
+  min-height: 36px;
+  padding: 0.45rem 0.75rem;
+  background: #ffffff;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.daily-verse-rain-controls button.is-on {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.continuous-rain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2600;
+  display: grid;
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+  background: #020617;
+}
+
+.continuous-rain-shell {
+  height: 100%;
+}
+
+.continuous-rain-scene,
+.continuous-rain-content {
+  min-height: calc(100dvh - max(1.5rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+}
+
+.continuous-rain-scene {
+  border-radius: 0;
+}
+
+.continuous-rain-content {
+  box-sizing: border-box;
+  height: 100%;
+  justify-content: flex-start;
+  gap: clamp(0.65rem, 1.55vh, 1.1rem);
+  /* 下方留白縮到很小:句子容器(flex:1)才會延伸到動作列之下,分頁能填到動作列上方、
+     不浪費空間。動作列/字級鈕是絕對定位浮在底部,不需靠此 padding 讓位。 */
+  padding: clamp(2rem, 5.6vh, 4.2rem) clamp(1rem, 4vw, 3rem) clamp(1.5rem, 3vh, 2.5rem);
+  overflow: hidden;
+}
+
+.continuous-rain-topbar {
+  max-width: min(92vw, 980px);
+}
+
+/* 窄螢幕：頂列往右縮，讓出左上角給獨立的 ✕ 關閉鈕。 */
+@media (max-width: 560px) {
+  .continuous-rain-topbar {
+    max-width: calc(100vw - 128px);
+    margin-left: 64px;
+  }
+
+}
+
+.continuous-rain-set-title {
+  max-width: min(72vw, 720px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(1.43em, 3.6vw, 2.03em);
+}
+
+.continuous-rain-phrases {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+  align-content: flex-start;
+  /* 只需一點下方留白避開動作列(原 6.5–9.2rem 太多,吃掉可用高度、句數變少)。 */
+  padding-bottom: clamp(2rem, 5vh, 3.5rem);
+  /* Tighter than the daily-verse base 0.6rem so more phrases fit per page and
+     it flips less often (the block's own vertical padding is halved below to
+     match). */
+  row-gap: 0.3rem;
+}
+
+/* One row: 提多書 1:1–16 · 多 1:1–16 · 🎙️ 朗讀者：… — wrapping only when a
+   narrow screen genuinely can't fit them. */
+.continuous-rain-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.15rem 0.6rem;
+  margin: 0 0 0.35rem;
+  /* Sized here, matched to .continuous-rain-phrases span, so the reference no
+     longer towers over the verse it labels. The children below are fractions
+     of THIS — they used to be nested inside the h2 and sized off it, so the
+     scale has to live on the row now that they are siblings. */
+  /* vmin (not vw) so the size keys off the phone's SHORT side — landscape then
+     matches portrait instead of ballooning with the wider viewport and fitting
+     fewer phrases per page. Heading + phrase share this so they stay matched. */
+  font-size: clamp(1.5em, 4.2vmin, 2.18em);
+}
+
+.continuous-rain-content h2 {
+  font-size: 1em;
+  margin: 0;
+}
+
+.continuous-rain-secondary-reference {
+  color: rgba(219, 234, 254, 0.82);
+  font-size: 0.62em;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+  /* Match the drop shadow the primary reference (h2) and the verse phrases
+     carry, so the second-language reference stays readable over bright water. */
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 4px 14px rgba(0, 0, 0, 0.6);
+}
+
+.continuous-rain-reader {
+  color: #000;
+  font-size: 0.5em;
+  font-weight: 600;
+  white-space: nowrap;
+  text-shadow: 0.06em 0.08em 2px rgba(255, 255, 255, 0.95), 0.12em 0.16em 8px rgba(255, 255, 255, 0.65);
+}
+
+.continuous-rain-phrases span {
+  min-height: 1.7em;
+  /* Vertical padding halved (0.31em → 0.15em) to bring phrases closer together
+     — the padding is invisible whitespace (boxless type), so this only tightens
+     the gap between blocks, fitting more per page. */
+  padding: 0.15em 0.48em;
+  /* vmin (not vw) so the size keys off the phone's SHORT side — landscape then
+     matches portrait instead of ballooning with the wider viewport and fitting
+     fewer phrases per page. Heading + phrase share this so they stay matched. */
+  font-size: clamp(1.5em, 4.2vmin, 2.18em);
+  /* 「就地淡入」:整頁一次擺好,取消掉落(-52vh)與 drop 動畫,只在「已讀到」時
+     以 opacity 淡入,鄰句不位移(消除掉落 / 右擠 / 跳頁的視覺抖動)。 */
+  transform: none;
+  opacity: 0;
+  transition: opacity 0.45s ease, color 0.24s ease, text-shadow 0.24s ease;
+  animation: none;
+}
+
+.continuous-rain-phrases span.is-revealed {
+  opacity: 1;
+}
+
+.continuous-rain-phrases span b,
+.continuous-rain-phrases span small {
+  display: block;
+  font: inherit;
+}
+
+.continuous-rain-phrases.has-secondary span {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18em;
+  /* Trimmed (2.85em → 2.4em) so a short bilingual block no longer reserves
+     empty space above/below its text — pairs sit closer, more per page. The
+     0.18em internal gap between the primary line and its translation is kept
+     so the two stay visually associated. */
+  min-height: 2.5em;
+  max-width: min(92vw, 860px);
+  text-align: center;
+}
+
+.continuous-rain-phrases.has-secondary span b {
+  line-height: 1.28;
+}
+
+.continuous-rain-phrases.has-secondary span small {
+  color: rgba(219, 234, 254, 0.86);
+  font-size: 0.75em;
+  font-weight: 800;
+  line-height: 1.18;
+  text-shadow: 0.06em 0.08em 2px rgba(0, 0, 0, 0.85), 0.14em 0.18em 10px rgba(0, 0, 0, 0.5);
+}
+
+.continuous-rain-phrases span.is-active {
+  /* 目前朗讀中的句子:不再掉落,只保留 opacity 淡入 + 基底的暖光(text-shadow)。 */
+  animation: none;
+  opacity: 1;
+}
+
+@keyframes continuousVersePhraseDrop {
+  from {
+    transform: translate3d(var(--drift), -52vh, 0);
+    opacity: 0;
+  }
+
+  68% {
+    transform: translate3d(0, 6px, 0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+/* Page flip:舊頁「瞬間」清掉(不漸變 → 不會看到新舊頁交疊的花花感),再進新頁。 */
+.continuous-rain-phrases.is-page-fading span {
+  animation: none !important;
+  opacity: 0 !important;
+  transition: none;
+}
+
+.continuous-rain-phrases span.is-page-head.is-active {
+  animation: continuousVersePhraseFadeIn 0.55s ease both;
+}
+
+@keyframes continuousVersePhraseFadeIn {
+  from { opacity: 0; transform: none; }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Phone landscape: the screen is short, but the bottom paddings + top chrome
+   were tuned for portrait and left room for only ONE phrase before a flip.
+   Reclaim vertical space top and bottom so at least two bilingual phrases fit
+   per page. Font size is untouched (kept equal to portrait). */
+@media (orientation: landscape) and (max-height: 540px) {
+  .continuous-rain-content {
+    padding-top: clamp(0.55rem, 2.4vh, 1.3rem);
+    padding-bottom: 3.1rem;
+    gap: clamp(0.3rem, 1vh, 0.6rem);
+  }
+
+  .continuous-rain-heading {
+    margin-bottom: 0.12rem;
+  }
+
+  .continuous-rain-phrases {
+    padding-bottom: 0.9rem;
+  }
+}
+
+.continuous-rain-topbar button {
+  width: 66px;
+  height: 66px;
+  font-size: 3rem;
+}
+
+.continuous-rain-font-controls {
+  position: fixed;
+  right: max(0.9rem, env(safe-area-inset-right));
+  bottom: max(0.9rem, env(safe-area-inset-bottom));
+  z-index: 2606;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+}
+
+.continuous-rain-secondary-picker {
+  position: fixed;
+  right: max(0.9rem, env(safe-area-inset-right));
+  bottom: calc(max(0.9rem, env(safe-area-inset-bottom)) + 58px);
+  z-index: 2606;
+  display: grid;
+  gap: 0.32rem;
+  min-width: min(260px, calc(100vw - 1.8rem));
+  border: 1px solid rgba(226, 232, 240, 0.72);
+  border-radius: 14px;
+  padding: 0.55rem 0.65rem;
+  background: rgba(248, 250, 252, 0.94);
+  color: #334155;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.continuous-rain-secondary-picker select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.continuous-rain-action-controls {
+  position: fixed;
+  left: 50%;
+  bottom: max(0.9rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 2606;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: min(94vw, 620px);
+  max-width: calc(100vw - max(1.8rem, env(safe-area-inset-left) + env(safe-area-inset-right)));
+}
+
+.continuous-rain-primary-actions,
+.continuous-rain-language-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.continuous-rain-primary-actions {
+  flex-wrap: wrap;
+}
+
+.continuous-rain-language-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.continuous-rain-action-controls button.is-icon {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  padding: 0;
+  border: 1.5px solid rgba(226, 232, 240, 0.7);
+  background: rgba(248, 250, 252, 0.9);
+  color: #0f172a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.continuous-rain-action-controls button.is-icon.is-play-pause {
+  background: rgba(248, 250, 252, 0.95);
+  color: #1e40af;
+  border-color: rgba(147, 197, 253, 0.8);
+}
+
+.continuous-rain-action-controls button.is-icon.is-stop {
+  border-color: rgba(248, 113, 113, 0.6);
+  background: rgba(15, 23, 42, 0.74);
+  color: #fecaca;
+}
+
+.continuous-rain-action-controls button.is-icon.is-primary {
+  border-color: rgba(147, 197, 253, 0.9);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+}
+
+.continuous-rain-action-controls button.is-icon:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.36);
+}
+
+/* 關閉鈕獨立停在左上角，較好找。雙 class 提高優先權——
+   否則手機版 media query 的 bottom 會把容器上下撐開、鈕跑到半腰。 */
+.continuous-rain-action-controls.continuous-rain-close-topleft {
+  top: max(0.9rem, env(safe-area-inset-top));
+  left: max(0.9rem, env(safe-area-inset-left));
+  bottom: auto;
+  transform: none;
+  width: auto;
+  max-width: none;
+}
+
+/* 按鈕解說浮標 — hover / 鍵盤 focus 時顯示 data-tip 內容。 */
+.continuous-rain-action-controls [data-tip] {
+  position: relative;
+}
+
+.continuous-rain-action-controls [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 12;
+}
+
+.continuous-rain-action-controls [data-tip]:hover::after,
+.continuous-rain-action-controls [data-tip]:focus-visible::after {
+  opacity: 1;
+}
+
+/* 左上角關閉鈕的浮標往下開，避免超出畫面頂端。 */
+.continuous-rain-close-topleft [data-tip]::after {
+  bottom: auto;
+  top: calc(100% + 10px);
+  left: 0;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-verse-rain-drops span {
+    animation: none;
+  }
+
+  .daily-verse-rain-phrases span {
+    transform: none;
+    opacity: 1;
+  }
+
+  .continuous-rain-phrases span.is-active {
+    animation: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .daily-verse-rain-scene,
+  .daily-verse-rain-content {
+    min-height: 620px;
+  }
+
+  .daily-verse-rain-actions {
+    width: calc(100% - 2rem);
+    gap: 0.38rem;
+  }
+
+  .daily-verse-rain-actions button {
+    min-height: 38px;
+    padding: 0.46rem 0.34rem;
+    font-size: 0.82rem;
+    gap: 0.28rem;
+  }
+
+  .daily-verse-rain-actions button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .daily-verse-rain-phrases {
+    min-height: 270px;
+  }
+
+  .continuous-rain-overlay {
+    padding: 0;
+  }
+
+  .continuous-rain-scene,
+  .continuous-rain-content {
+    min-height: 100dvh;
+  }
+
+  /* The overlay's own padding is zeroed just above, which is what threw away
+     env(safe-area-inset-top) and left the topic-set row at a flat 1.2rem —
+     underneath the iPhone notch / Dynamic Island. Re-apply the inset HERE.
+     No notch-sized floor: the inset is the whole signal. Full-screen contexts
+     (installed app, standalone PWA) report ~59px and the row clears the island;
+     an in-app browser (LINE, WhatsApp) renders below its OWN header and
+     correctly reports 0, where a floor would stack dead space on top of that
+     header. 1.2rem stays as the ordinary minimum gap. */
+  .continuous-rain-content {
+    /* 下方留白縮到最小(只留安全區),句子容器延伸到動作列之下,分頁填到動作列上方、
+       不再提早跳頁。動作列/字級鈕絕對定位浮在底部,不需此 padding 讓位。 */
+    padding: max(env(safe-area-inset-top), 1.2rem) 0.85rem calc(max(0.75rem, env(safe-area-inset-bottom)) + 0.75rem);
+  }
+
+  .continuous-rain-action-controls {
+    left: 50%;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    gap: 0.36rem;
+    /* Cap width so the row never overlaps .continuous-rain-font-controls (A-/A/A+)
+       on the right. Without this, the action-controls box covered the font-size
+       buttons even though they were visually separate, making A-/A/A+ unclickable. */
+    width: min(96vw, 620px);
+    max-width: calc(100vw - max(0.75rem, env(safe-area-inset-left)) - max(0.75rem, env(safe-area-inset-right)));
+  }
+
+  .continuous-rain-primary-actions,
+  .continuous-rain-language-actions {
+    gap: 0.36rem;
+  }
+
+  .continuous-rain-phrases {
+    padding-bottom: clamp(1.5rem, 5vh, 3rem);
+  }
+
+  .continuous-rain-action-controls button.is-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .continuous-rain-font-controls {
+    right: max(0.75rem, env(safe-area-inset-right));
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .continuous-rain-secondary-picker {
+    right: max(0.75rem, env(safe-area-inset-right));
+    bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 56px);
+    min-width: min(220px, calc(100vw - 1.5rem));
+    padding: 0.48rem 0.55rem;
+  }
+}
+
+@media (max-width: 860px) {
+  .privacy-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .privacy-page {
+    padding: 1rem;
+  }
+
+  .privacy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-hero h1 {
+    font-size: clamp(2.1rem, 14vw, 3.7rem);
+  }
+}

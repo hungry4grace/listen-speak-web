@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Shepherd background">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="0.65" stop-color="#bae6fd"/><stop offset="1" stop-color="#f0fdf4"/></linearGradient></defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="320" cy="180" r="60" fill="#fff" opacity="0.9"/>
+  <ellipse cx="380" cy="200" rx="80" ry="46" fill="#fff" opacity="0.9"/>
+  <ellipse cx="1200" cy="150" rx="90" ry="40" fill="#fff" opacity="0.8"/>
+  <ellipse cx="500" cy="980" rx="1000" ry="360" fill="#4ade80" opacity="0.9"/>
+  <ellipse cx="1400" cy="1020" rx="900" ry="380" fill="#22c55e" opacity="0.85"/>
+  <g>
+    <ellipse cx="1050" cy="700" rx="52" ry="34" fill="#f8fafc"/>
+    <circle cx="1105" cy="686" r="18" fill="#334155"/>
+    <rect x="1020" y="726" width="8" height="26" fill="#334155"/><rect x="1062" y="726" width="8" height="26" fill="#334155"/>
+    <ellipse cx="880" cy="760" rx="40" ry="26" fill="#f8fafc"/>
+    <circle cx="922" cy="750" r="14" fill="#334155"/>
+    <rect x="858" y="780" width="6" height="20" fill="#334155"/><rect x="892" y="780" width="6" height="20" fill="#334155"/>
+  </g>
+</svg>

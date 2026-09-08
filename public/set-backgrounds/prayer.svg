@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Prayer background">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#020617"/><stop offset="0.6" stop-color="#1e1b4b"/><stop offset="1" stop-color="#312e81"/></linearGradient><radialGradient id="candle" cx="50%" cy="74%" r="30%"><stop offset="0" stop-color="#fde68a" stop-opacity="0.95"/><stop offset="0.5" stop-color="#f59e0b" stop-opacity="0.4"/><stop offset="1" stop-color="#f59e0b" stop-opacity="0"/></radialGradient></defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#candle)"/>
+  <rect x="770" y="700" width="60" height="140" rx="10" fill="#fef3c7" opacity="0.9"/>
+  <ellipse cx="800" cy="672" rx="16" ry="30" fill="#fde047"/>
+  <ellipse cx="800" cy="662" rx="8" ry="16" fill="#fff7ed"/>
+  <circle cx="300" cy="150" r="3" fill="#fff" opacity="0.8"/>
+  <circle cx="470" cy="90" r="2" fill="#fff" opacity="0.6"/>
+  <circle cx="1180" cy="130" r="3" fill="#fff" opacity="0.7"/>
+  <circle cx="1330" cy="240" r="2" fill="#fff" opacity="0.6"/>
+  <circle cx="1050" cy="70" r="2.5" fill="#fff" opacity="0.7"/>
+</svg>

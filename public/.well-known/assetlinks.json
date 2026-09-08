@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.verserain.app",
+      "sha256_cert_fingerprints": [
+        "AC:EB:9D:5A:BD:BD:8F:78:52:95:A1:6D:4A:F5:DA:78:3A:C8:F5:F2:89:7B:9E:6B:1D:76:9B:E2:0C:7E:68:DF",
+        "94:A9:CE:F1:D3:21:9B:F4:E6:F1:4F:17:49:C8:8D:0E:9C:31:F4:3D:D8:E5:2A:84:DB:25:8F:9B:E1:C9:03:4D"
+      ]
+    }
+  }
+]
