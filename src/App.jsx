@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { expandSameChapterRefs } from './lib/expandSameChapterRefs.js';
 import { Play, Pause, RotateCcw, Heart, Zap, Trophy, Crown, Star, Home, XCircle, Headphones, Music, VolumeX, Search, Share2, Dices, Mic, MicOff, Users, CloudRain, Info, Edit, TreePine, Gamepad2, Map, Settings, Library, Volume2, Shuffle, Swords, ShoppingBasket, Apple, Mail, Lock, Sprout, Leaf, RotateCw, Smartphone, Hourglass, Frown, X, Camera, Square, Copy, ArrowRightLeft, MessageCircle, Languages, ChevronUp, ChevronDown } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import usePartySocket from 'partysocket/react';
@@ -9,14 +8,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { classifyGardenResponse, decideGardenSync, buildFruitAuthorKeys, aggregateFruitResults } from './lib/gardenSync.js';
 import { voiceId, voiceMatchesSavedKey, dedupeVoices, buildVoiceOptions } from './lib/voicePicker.js';
 import { splitVersePhrases } from './lib/phraseSplitter.js';
-import { stripBollsMarkup, stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
+import { stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
 import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf } from './lib/lang.js';
 import { localizeSet, itemZh, itemEn, pickText, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
 import Annotated from './Annotated.jsx';
 import { loadAnnotator } from './lib/annotate.js';
 import './index.css';
-import { BIBLE_BOOKS, getBookAbbr, getBookFullName } from './bibleDictionary';
 import I18N_FILLINS from './i18nFillins';
 import ChallengeSetupModal, { loadChallengeSetup } from './ChallengeSetupModal';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
@@ -1179,358 +1177,6 @@ const PLAY_FONT_OPTIONS = [
 ];
 const DEFAULT_PLAY_FONT_CHOICE = 'normal';
 
-// --- Bible verse cross-language lookup utilities ---
-function getEnglishReferenceFromKey(normalizedKey) {
-  if (!normalizedKey) return null;
-  const [bookPart, chapterVerse] = normalizedKey.split('|');
-  if (!chapterVerse) return null;
-  const bookId = parseInt(bookPart, 10);
-  if (Number.isNaN(bookId)) return null;
-  const book = BIBLE_BOOKS.find(b => b.id === bookId);
-  if (!book) return null;
-  // chapterVerse may be "35:1-3" (verse) or just "35" (whole chapter)
-  return `${book.names[2]} ${chapterVerse}`;
-}
-
-// Bumped to v2 when the fetch pipeline started stripping Hebrew verse numerals
-// and Strong's numbers. Entries written by the old pipeline are already-broken
-// text ("א  משלי שלמה", "feareth3373") and would be served forever, so a fix to
-// the fetcher alone never reaches anyone who had used the feature before. The
-// version lives in the key, so old data is orphaned rather than migrated.
-const BIBLE_CACHE_KEY = 'verserain_bible_cache_v2';
-const LEGACY_BIBLE_CACHE_KEYS = ['verserain_bible_cache'];
-
-function getCachedBibleVerse(version, normalizedKey) {
-  try {
-    const raw = localStorage.getItem(BIBLE_CACHE_KEY);
-    if (!raw) return null;
-    const cache = JSON.parse(raw);
-    const cached = cache[`${version}|${normalizedKey}`];
-    if (!cached) return null;
-    // Older cache entries may include bolls.life markup (<i>, <na>, etc.).
-    // Strip on read so already-cached verses render cleanly without forcing
-    // a re-fetch.
-    return cached.includes('<') ? cached.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : cached;
-  } catch { return null; }
-}
-
-function setCachedBibleVerse(version, normalizedKey, text) {
-  try {
-    const raw = localStorage.getItem(BIBLE_CACHE_KEY);
-    const cache = raw ? JSON.parse(raw) : {};
-    cache[`${version}|${normalizedKey}`] = text;
-    localStorage.setItem(BIBLE_CACHE_KEY, JSON.stringify(cache));
-  } catch { /* quota exceeded or parse error — ignore */ }
-}
-
-// Reclaim the space the orphaned cache is holding — it can run to megabytes,
-// and localStorage is already tight enough that custom-set writes catch quota
-// errors elsewhere in this file.
-function dropLegacyBibleCaches() {
-  for (const key of LEGACY_BIBLE_CACHE_KEYS) {
-    try { localStorage.removeItem(key); } catch { /* nothing we can do */ }
-  }
-}
-
-async function fetchBibleVerseFromAPI(englishRef, targetVersion) {
-  if (!englishRef) return null;
-  try {
-    if (targetVersion === 'esv') {
-      const res = await fetch(`/api/esv-passage?q=${encodeURIComponent(englishRef)}`);
-      if (res.ok) { const d = await res.json(); return d.text || null; }
-    }
-    if (targetVersion === 'kjv') {
-      const res = await fetch(`https://bible-api.com/${encodeURIComponent(englishRef)}?translation=kjv`);
-      if (res.ok) { const d = await res.json(); return d.text?.replace(/\n/g, ' ').trim() || null; }
-    }
-    if (targetVersion === 'niv') {
-      const res = await fetch(`/api/niv-passage?reference=${encodeURIComponent(englishRef)}`);
-      if (res.ok) { const d = await res.json(); return d.text || null; }
-    }
-  } catch { /* network error — ignore */ }
-  return null;
-}
-
-// bolls.life free Bible API — covers CUV/CUVS/KO/JA/DE/ES/FA/HE/VI
-const BOLLS_TRANSLATIONS = {
-  cuv:  'CUNP',   // Traditional Chinese (新標點和合本)
-  cuvs: 'CUNPS',  // Simplified Chinese (新标点和合本)
-  ko:   'KRV',    // Korean Revised Version (개역개정)
-  ja:   'NJB',    // Japanese New Interconfessional Bible (新共同訳)
-  de:   'SCH',    // German Schlachter 1951
-  es:   'RV1960', // Spanish Reina-Valera 1960
-  fa:   'POV',    // Persian Old Version
-  ar:   'SVD',    // Arabic Smith and Van Dyke 1865 (most widely-used)
-  vi:   'VI1934', // Vietnamese 1934
-  id:   'TB',     // Indonesian Terjemahan Baru (most widely-used)
-  ms:   'TB',     // Malay OT fallback → Indonesian TB. NT uses real Malay via
-                  // fetchMalayNTVerse (helloao zlm_ksz); see fetchVerseFromBolls.
-  pt:   'ARC09',  // Portuguese Almeida Revista e Corrigida 2009 (bolls slug)
-  fr:   'FRLSG',  // French Louis Segond 1910 (bolls slug)
-  ru:   'SYNOD',  // Russian Synodal (bolls slug)
-  hi:   'HIOV',   // Hindi Old Version (BSI re-edited; bolls slug)
-  // he: OT → HAC, NT → DHNT  (handled below)
-  // tr, my: not available on bolls.life
-};
-
-function getBollsSlug(targetVersion, bookId) {
-  if (targetVersion === 'he') return bookId <= 39 ? 'HAC' : 'DHNT';
-  return BOLLS_TRANSLATIONS[targetVersion] || null;
-}
-
-// getbible.net fallback for languages bolls.life doesn't carry — currently
-// Turkish (Kutsal Kitap) and Myanmar/Burmese (Judson 1835). Same shape as
-// fetchVerseFromBolls: normalizedKey "<bookId>|<chap>" or "<bookId>|<chap>:<verses>"
-// → joined verse text string. CORS-open and rate-friendly (whole-chapter
-// fetch, then filter).
-const GETBIBLE_TRANSLATIONS = {
-  tr: 'turkish', // Kutsal Kitap
-  my: 'judson',  // Judson 1835 Burmese Bible
-};
-
-async function fetchVerseFromGetBible(normalizedKey, targetVersion) {
-  const slug = GETBIBLE_TRANSLATIONS[targetVersion];
-  if (!slug) return null;
-  const [bookPart, chapterVerse] = (normalizedKey || '').split('|');
-  if (!chapterVerse) return null;
-  const bookId = parseInt(bookPart, 10);
-  if (Number.isNaN(bookId)) return null;
-
-  const colonIdx = chapterVerse.indexOf(':');
-  const chapter = colonIdx < 0
-    ? parseInt(chapterVerse, 10)
-    : parseInt(chapterVerse.slice(0, colonIdx), 10);
-  if (Number.isNaN(chapter)) return null;
-
-  try {
-    const res = await fetch(`https://api.getbible.net/v2/${slug}/${bookId}/${chapter}.json`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const verses = data?.verses;
-    if (!Array.isArray(verses) || !verses.length) return null;
-
-    // Chapter-only — concat all verses with Arabic semicolon so splitVersePhrases
-    // can break on verse boundaries (matches fetchVerseFromBolls behaviour).
-    if (colonIdx < 0) {
-      return verses.map(v => stripBollsMarkup(v.text || ''))
-        .filter(Boolean).join('؛ ') || null;
-    }
-
-    // Verse-range — filter to requested numbers (cap at 9 in line with bolls path).
-    const range = chapterVerse.slice(colonIdx + 1);
-    let wanted = new Set();
-    if (range.includes('-')) {
-      const [s, e] = range.split('-').map(Number);
-      if (!Number.isNaN(s) && !Number.isNaN(e)) {
-        for (let v = s; v <= Math.min(e, s + 8); v++) wanted.add(v);
-      }
-    } else {
-      const v = parseInt(range, 10);
-      if (!Number.isNaN(v)) wanted.add(v);
-    }
-    if (!wanted.size) return null;
-    return verses
-      .filter(v => wanted.has(Number(v.verse)))
-      .map(v => stripBollsMarkup(v.text || ''))
-      .filter(Boolean).join(' ').trim() || null;
-  } catch { return null; }
-}
-
-// Modern standard Malay (Bahasa Melayu) — helloao "zlm_ksz" (Kitab Suci Zabur
-// dan Injil), NEW TESTAMENT ONLY. No free API carries a full Malay OT, so OT
-// books fall back to Indonesian TB (getBollsSlug('ms') === 'TB'). Keyless and
-// CORS-open (access-control-allow-origin: *), so fetched straight from client.
-const HELLOAO_MALAY_NT_USFM = {
-  40: 'MAT', 41: 'MRK', 42: 'LUK', 43: 'JHN', 44: 'ACT', 45: 'ROM', 46: '1CO',
-  47: '2CO', 48: 'GAL', 49: 'EPH', 50: 'PHP', 51: 'COL', 52: '1TH', 53: '2TH',
-  54: '1TI', 55: '2TI', 56: 'TIT', 57: 'PHM', 58: 'HEB', 59: 'JAS', 60: '1PE',
-  61: '2PE', 62: '1JN', 63: '2JN', 64: '3JN', 65: 'JUD', 66: 'REV',
-};
-async function fetchMalayNTVerse(normalizedKey) {
-  const [bookPart, chapterVerse] = String(normalizedKey || '').split('|');
-  if (!chapterVerse) return '';
-  const usfm = HELLOAO_MALAY_NT_USFM[parseInt(bookPart, 10)];
-  if (!usfm) return ''; // OT (or unknown) → caller falls back to Indonesian TB
-  const colonIdx = chapterVerse.indexOf(':');
-  const chapter = parseInt(colonIdx < 0 ? chapterVerse : chapterVerse.slice(0, colonIdx), 10);
-  if (Number.isNaN(chapter)) return '';
-  let vStart = null, vEnd = null;
-  if (colonIdx >= 0) {
-    const range = chapterVerse.slice(colonIdx + 1);
-    if (range.includes('-')) {
-      const [s, e] = range.split('-').map(Number);
-      if (!Number.isNaN(s)) { vStart = s; vEnd = Number.isNaN(e) ? s : Math.min(e, s + 8); }
-    } else { const v = parseInt(range, 10); if (!Number.isNaN(v)) { vStart = v; vEnd = v; } }
-  }
-  try {
-    const res = await fetch(`https://bible.helloao.org/api/zlm_ksz/${usfm}/${chapter}.json`);
-    if (!res.ok) return '';
-    const data = await res.json();
-    const content = data?.chapter?.content || [];
-    const parts = [];
-    for (const c of content) {
-      if (c?.type !== 'verse') continue;
-      if (vStart == null || (c.number >= vStart && c.number <= vEnd)) {
-        // content items are phrase/line segments (incl. poetry) — space-join, not
-        // concat, else adjacent lines merge ("pada-Kukerana"); collapse doubles.
-        const txt = (c.content || []).map(x => typeof x === 'string' ? x : (x?.text || '')).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-        if (txt) parts.push(txt);
-      }
-    }
-    // chapter-only → verse-boundary separator (matches bolls); range/single → space
-    return parts.join(vStart == null ? '؛ ' : ' ').trim();
-  } catch { return ''; }
-}
-
-async function fetchVerseFromBolls(normalizedKey, targetVersion) {
-  // Malay: prefer the real Bahasa Melayu NT; OT falls through to Indonesian TB below.
-  if (targetVersion === 'ms') {
-    const malay = await fetchMalayNTVerse(normalizedKey);
-    if (malay) return malay;
-  }
-  const [bookPart, chapterVerse] = (normalizedKey || '').split('|');
-  if (!chapterVerse) return null;
-  const bookId = parseInt(bookPart, 10);
-  if (Number.isNaN(bookId)) return null;
-  const slug = getBollsSlug(targetVersion, bookId);
-  if (!slug) return null;
-
-  const colonIdx = chapterVerse.indexOf(':');
-
-  // Chapter-only reference (no colon, e.g. "91") — fetch whole chapter
-  if (colonIdx < 0) {
-    const chapter = parseInt(chapterVerse, 10);
-    if (Number.isNaN(chapter)) return null;
-    try {
-      const res = await fetch(`https://bolls.life/get-text/${slug}/${bookId}/${chapter}/`);
-      if (!res.ok) return null;
-      const verses = await res.json();
-      if (!Array.isArray(verses) || !verses.length) return null;
-      // Join with Arabic semicolon so splitVersePhrases() can split on verse boundaries
-      return verses
-        .map(v => stripLeadingVerseNumeral(stripBollsMarkup(v.text), v.verse))
-        .filter(Boolean)
-        .join('؛ ') || null;
-    } catch { return null; }
-  }
-
-  const chapter = parseInt(chapterVerse.slice(0, colonIdx), 10);
-  const verseRange = chapterVerse.slice(colonIdx + 1);
-  if (Number.isNaN(chapter) || !verseRange) return null;
-
-  // Build list of verse numbers (handle ranges like "14-15")
-  const verseNums = [];
-  if (verseRange.includes('-')) {
-    const [startV, endV] = verseRange.split('-').map(Number);
-    if (!Number.isNaN(startV) && !Number.isNaN(endV)) {
-      for (let v = startV; v <= Math.min(endV, startV + 8); v++) verseNums.push(v);
-    }
-  } else {
-    const v = parseInt(verseRange, 10);
-    if (!Number.isNaN(v)) verseNums.push(v);
-  }
-  if (!verseNums.length) return null;
-
-  try {
-    const texts = await Promise.all(
-      verseNums.map(v =>
-        fetch(`https://bolls.life/get-verse/${slug}/${bookId}/${chapter}/${v}/`)
-          .then(r => r.ok ? r.json() : null)
-          .then(d => d?.text ? stripLeadingVerseNumeral(stripBollsMarkup(d.text), v) || null : null)
-          .catch(() => null)
-      )
-    );
-    const combined = texts.filter(Boolean).join(' ').trim();
-    return combined || null;
-  } catch {
-    return null;
-  }
-}
-
-// Language-aware verse-text fetch for the custom-set editor (single-row
-// auto-fetch + bulk import). English translations (ESV / NIV / KJV) each hit
-// their own API; every other language goes to bolls.life with the CORRECT
-// per-language slug via getBollsSlug (Spanish → RV1960, Korean → KRV, …),
-// then getbible.net for the two languages bolls lacks (Turkish, Burmese).
-// Returns '' on miss. Previously both call sites hard-coded the Chinese CUV
-// slug, so a Spanish/Korean/etc. set silently imported Chinese verse text.
-// 台語漢字本 — no public Bible API exists, so the PartyKit backend proxies
-// (and caches) chapters from lingshyang.com. Same key shape as
-// fetchVerseFromBolls: "<bookId>|<chap>" or "<bookId>|<chap>:<verses>".
-async function fetchVerseFromTaibible(normalizedKey) {
-  const [bookPart, chapterVerse] = (normalizedKey || '').split('|');
-  if (!chapterVerse) return null;
-  const bookId = parseInt(bookPart, 10);
-  if (Number.isNaN(bookId)) return null;
-  const colonIdx = chapterVerse.indexOf(':');
-  const chapter = parseInt(colonIdx >= 0 ? chapterVerse.slice(0, colonIdx) : chapterVerse, 10);
-  if (Number.isNaN(chapter)) return null;
-  try {
-    const res = await fetch(`${PARTY_DB}/taibible?book=${bookId}&chapter=${chapter}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const chap = data?.verses || {};
-    let nums;
-    if (colonIdx >= 0) {
-      nums = [];
-      for (const part of chapterVerse.slice(colonIdx + 1).split(',')) {
-        const r = part.trim().match(/^(\d+)\s*-\s*(\d+)$/);
-        if (r) { for (let i = +r[1]; i <= +r[2]; i++) nums.push(i); }
-        else if (part.trim()) nums.push(parseInt(part, 10));
-      }
-    } else {
-      nums = Object.keys(chap).map(Number).sort((a, b) => a - b);
-    }
-    const parts = nums.map(n => chap[n]).filter(Boolean);
-    return parts.length ? parts.join('') : null;
-  } catch {
-    return null;
-  }
-}
-
-// Normalise the separators people (and our own data) actually use in a
-// chapter:verse input, so one spelling reaches the range parser:
-//   6:9–13 en-dash · 6:9—13 em-dash · 6:9～13 fullwidth tilde · 6：9-13
-//
-// The en-dash is the one that bit: the range regex below only accepts an ASCII
-// '-', so "太 6:9–13" matched just ":9" and quietly fetched a SINGLE verse
-// instead of the range. The app's own verse files ship references in exactly
-// that form ("Isaiah 58:6–12"), and the sibling local-DB lookup in the editor
-// already normalised these — only the path feeding the API call didn't.
-function normalizeVerseInput(value) {
-  return String(value || '').replace(/[～~–—]/g, '-').replace(/[：]/g, ':').trim();
-}
-
-async function fetchEditorVerseText({ bookInfo, sanitized, version }) {
-  const chapMatch = String(sanitized).match(/^(\d+)/);
-  if (!chapMatch) return '';
-  const chapter = parseInt(chapMatch[1], 10);
-  const verseMatch = String(sanitized).match(/:(\d+)(?:-(\d+))?/);
-
-  if (isEnglishBibleVersion(version)) {
-    const bookAbbr = getBookAbbr(bookInfo, version);
-    const englishRef = `${bookInfo.names?.[2] || bookInfo.names?.[0] || bookAbbr} ${sanitized}`;
-    const fetched = await fetchBibleVerseFromAPI(englishRef, version);
-    return fetched ? String(fetched).replace(/\s+/g, ' ').trim() : '';
-  }
-
-  // Build the "<bookId>|<chapter>[:<verses>]" key fetchVerseFromBolls expects.
-  let versePart = String(chapter);
-  if (verseMatch) {
-    versePart = verseMatch[2]
-      ? `${chapter}:${verseMatch[1]}-${verseMatch[2]}`
-      : `${chapter}:${verseMatch[1]}`;
-  }
-  const key = `${bookInfo.id}|${versePart}`;
-  let combined = version === 'tw'
-    ? await fetchVerseFromTaibible(key)
-    : (await fetchVerseFromBolls(key, version) || await fetchVerseFromGetBible(key, version));
-  if (!combined) return '';
-  // CJK verses read without inter-character spaces.
-  if (version === 'cuv' || version === 'cuvs' || version === 'tw') combined = combined.replace(/\s+/g, '');
-  return combined.replace(/\s+/g, ' ').trim();
-}
-
 // Check that a piece of text is likely written in the expected script for the given version.
 // Used to reject local verse-set matches that accidentally contain the wrong language (e.g. KJV
 // text stored inside a Hebrew-labelled set).
@@ -1599,550 +1245,10 @@ function getSecondaryPhrasesForIndex(primaryIndex, primaryLength, secondaryPhras
   }
 }
 
-// Full Hebrew book names → book ID (1-66).
-// BIBLE_BOOKS.he only stores abbreviations (e.g. "תה"), but Hebrew verse sets
-// store full names (e.g. "תהילים"). This map bridges the gap.
-const HEBREW_FULL_BOOK_ID = {
-  'בראשית':1,'שמות':2,'ויקרא':3,'במדבר':4,'דברים':5,
-  'יהושע':6,'שופטים':7,'רות':8,
-  'שמואל א':9,'א שמואל':9,'שמואל ב':10,'ב שמואל':10,
-  'מלכים א':11,'א מלכים':11,'מלכים ב':12,'ב מלכים':12,
-  'דברי הימים א':13,'א דברי הימים':13,'דברי הימים ב':14,'ב דברי הימים':14,
-  'עזרא':15,'נחמיה':16,'אסתר':17,'איוב':18,'תהילים':19,
-  'משלי':20,'קהלת':21,'שיר השירים':22,'ישעיהו':23,'ירמיהו':24,
-  'איכה':25,'יחזקאל':26,'דניאל':27,'הושע':28,'יואל':29,
-  'עמוס':30,'עובדיה':31,'יונה':32,'מיכה':33,'נחום':34,
-  'חבקוק':35,'צפניה':36,'חגי':37,'זכריה':38,'מלאכי':39,
-  'מתי':40,'מתיאוס':40,'מרקוס':41,'לוקס':42,'יוחנן':43,
-  'מעשי השליחים':44,'מעשים':44,'רומים':45,
-  'קורינתים א':46,'א קורינתים':46,'קורינתים ב':47,'ב קורינתים':47,
-  'גלטים':48,'אפסים':49,'פיליפים':50,'קולסים':51,
-  'תסלוניקים א':52,'א תסלוניקים':52,'תסלוניקים ב':53,'ב תסלוניקים':53,
-  'טימותיאוס א':54,'א טימותיאוס':54,'טימותיאוס ב':55,'ב טימותיאוס':55,
-  'טיטוס':56,'פילמון':57,'עברים':58,'יעקב':59,
-  'פטרוס א':60,'א פטרוס':60,'פטרוס ב':61,'ב פטרוס':61,
-  'יוחנן א':62,'א יוחנן':62,'יוחנן ב':63,'ב יוחנן':63,'יוחנן ג':64,'ג יוחנן':64,
-  'יהודה':65,'חזון יוחנן':66,'התגלות':66,'חזון':66,
-
-  // Spelling variants observed in verses_he.js
-  'תהלים':19,                    // alt spelling of תהילים (Psalms)
-  'קולוסים':51,                  // alt spelling of קולסים (Colossians)
-
-  // ASCII-digit prefix variants: verse files sometimes write "1 יוחנן 3:1"
-  // (Arabic numeral) instead of "יוחנן א:א" (Hebrew letter numeral). Both
-  // forms need to resolve.
-  '1 יוחנן':62,'2 יוחנן':63,'3 יוחנן':64,
-  '1 קורינתים':46,'2 קורינתים':47,
-  '1 פטרוס':60,'2 פטרוס':61,
-  '1 שמואל':9,'2 שמואל':10,
-  '1 מלכים':11,'2 מלכים':12,
-  '1 דברי הימים':13,'2 דברי הימים':14,
-  '1 תסלוניקים':52,'2 תסלוניקים':53,
-  '1 טימותיאוס':54,'2 טימותיאוס':55,
-};
-
-// Korean Bible book full names → book id. BIBLE_BOOKS only stores 1-2 char
-// abbreviations in the `ko` field (e.g. "사" for Isaiah), so references in
-// the form "이사야 40:31" fail the BIBLE_BOOKS lookup → normalizeVerseReferenceKey
-// returns the raw lowercased string as a key → bolls fallback can't parse a
-// numeric book id → secondary language never appears for Korean-primary sets.
-// This map fixes that for every Korean-primary reference.
-const KOREAN_FULL_BOOK_ID = {
-  '창세기':1,'출애굽기':2,'레위기':3,'민수기':4,'신명기':5,
-  '여호수아':6,'사사기':7,'룻기':8,
-  '사무엘상':9,'사무엘하':10,'열왕기상':11,'열왕기하':12,
-  '역대상':13,'역대하':14,'에스라':15,'느헤미야':16,'에스더':17,
-  '욥기':18,'시편':19,'잠언':20,'전도서':21,'아가':22,
-  '이사야':23,'예레미야':24,'예레미야애가':25,'애가':25,
-  '에스겔':26,'다니엘':27,'호세아':28,'요엘':29,'아모스':30,
-  '오바댜':31,'요나':32,'미가':33,'나훔':34,'하박국':35,
-  '스바냐':36,'학개':37,'스가랴':38,'말라기':39,
-  '마태복음':40,'마가복음':41,'누가복음':42,'요한복음':43,
-  '사도행전':44,'로마서':45,
-  '고린도전서':46,'고린도후서':47,
-  '갈라디아서':48,'에베소서':49,'빌립보서':50,'골로새서':51,
-  '데살로니가전서':52,'데살로니가후서':53,
-  '디모데전서':54,'디모데후서':55,'디도서':56,'빌레몬서':57,
-  '히브리서':58,'야고보서':59,
-  '베드로전서':60,'베드로후서':61,
-  '요한일서':62,'요한이서':63,'요한삼서':64,
-  '유다서':65,'요한계시록':66,'계시록':66,
-};
-
-// Multilingual full-name → book id. BIBLE_BOOKS only stores short
-// abbreviations in per-language fields (ja, de, es, tr, vi, fa, my) — but
-// the verse files use full names like "マタイの福音書", "Johannes",
-// "Génesis", "Yuhanna", "Giăng", "یوحنا", "ယောဟန်". Without this map
-// those references can't normalize → secondary-language pairing and bolls
-// fetch both fail. Entries are observed in the corresponding verses_<lang>.js
-// files; add more if a new verse file introduces a new spelling.
-const MULTILANG_FULL_BOOK_ID = {
-  // Japanese
-  '創世記':1,'出エジプト記':2,'レビ記':3,'民数記':4,'申命記':5,
-  'ヨシュア記':6,'士師記':7,'ルツ記':8,
-  'サムエル記第一':9,'サムエル記第二':10,
-  '列王記第一':11,'列王記第二':12,'歴代誌第一':13,'歴代誌第二':14,
-  'エズラ記':15,'ネヘミヤ記':16,'エステル記':17,'ヨブ記':18,
-  '詩篇':19,'箴言':20,'伝道者の書':21,'雅歌':22,
-  'イザヤ書':23,'イザヤ':23,
-  'エレミヤ書':24,'エレミヤ':24,'哀歌':25,'エゼキエル書':26,
-  'ダニエル書':27,'ホセア書':28,'ヨエル書':29,'アモス書':30,
-  'オバデヤ書':31,'ヨナ書':32,'ミカ書':33,'ナホム書':34,
-  'ハバクク書':35,'ハバクク':35,'ゼパニヤ書':36,'ゼパニヤ':36,
-  'ハガイ書':37,'ゼカリヤ書':38,'マラキ書':39,
-  'マタイの福音書':40,'マタイ':40,'マルコの福音書':41,'マルコ':41,
-  'ルカの福音書':42,'ルカ':42,'ヨハネの福音書':43,'ヨハネ':43,
-  '使徒の働き':44,'使徒言行録':44,'ローマ人への手紙':45,'ローマ書':45,
-  'コリント人への手紙 第一':46,'第一コリント':46,
-  'コリント人への手紙 第二':47,'第二コリント':47,
-  'ガラテヤ人への手紙':48,'ガラテヤ':48,
-  'エペソ人への手紙':49,'エペソ':49,
-  'ピリピ人への手紙':50,'ピリピ':50,
-  'コロサイ人への手紙':51,'コロサイ':51,
-  'テサロニケ人への手紙 第一':52,'テサロニケ人への手紙 第二':53,
-  'テモテへの手紙 第一':54,'テモテへの手紙 第二':55,
-  'テトスへの手紙':56,'ピレモンへの手紙':57,
-  'ヘブル人への手紙':58,'ヘブル':58,'ヤコブの手紙':59,'ヤコブ':59,
-  'ペテロの手紙 第一':60,'ペテロへの手紙 第一':60,
-  'ペテロの手紙 第二':61,'ペテロへの手紙 第二':61,
-  'ヨハネの手紙 第一':62,'ヨハネの手紙 第二':63,'ヨハネの手紙 第三':64,
-  'ユダの手紙':65,'ヨハネの黙示録':66,
-
-  // German
-  'Genesis':1,'1.Mose':1,'1. Mose':1,'2.Mose':2,'2. Mose':2,'Exodus':2,
-  '3.Mose':3,'3. Mose':3,'Levitikus':3,'4.Mose':4,'4. Mose':4,'Numeri':4,
-  '5.Mose':5,'5. Mose':5,'Deuteronomium':5,
-  'Josua':6,'Richter':7,'Rut':8,
-  '1.Samuel':9,'1. Samuel':9,'2.Samuel':10,'2. Samuel':10,
-  '1.Könige':11,'1. Könige':11,'2.Könige':12,'2. Könige':12,
-  '1.Chronik':13,'1. Chronik':13,'2.Chronik':14,'2. Chronik':14,
-  'Esra':15,'Nehemia':16,'Ester':17,'Hiob':18,
-  'Psalm':19,'Psalmen':19,'Sprüche':20,'Sprichwörter':20,
-  'Prediger':21,'Hoheslied':22,
-  'Jesaja':23,'Jeremia':24,'Klagelieder':25,'Hesekiel':26,'Daniel':27,
-  'Hosea':28,'Joel':29,'Amos':30,'Obadja':31,'Jona':32,'Micha':33,
-  'Nahum':34,'Habakuk':35,'Zefanja':36,'Haggai':37,'Sacharja':38,'Maleachi':39,
-  'Matthäus':40,'Markus':41,'Lukas':42,'Johannes':43,'Apostelgeschichte':44,
-  'Römer':45,
-  '1.Korinther':46,'1. Korinther':46,'2.Korinther':47,'2. Korinther':47,
-  'Galater':48,'Epheser':49,'Philipper':50,'Kolosser':51,
-  '1.Thessalonicher':52,'1. Thessalonicher':52,
-  '2.Thessalonicher':53,'2. Thessalonicher':53,
-  '1.Timotheus':54,'1. Timotheus':54,'2.Timotheus':55,'2. Timotheus':55,
-  'Titus':56,'Philemon':57,'Hebräer':58,'Jakobus':59,
-  '1.Petrus':60,'1. Petrus':60,'2.Petrus':61,'2. Petrus':61,
-  '1.Johannes':62,'1. Johannes':62,'2.Johannes':63,'2. Johannes':63,
-  '3.Johannes':64,'3. Johannes':64,
-  'Judas':65,'Offenbarung':66,
-
-  // Spanish
-  'Génesis':1,'Éxodo':2,'Levítico':3,'Números':4,'Deuteronomio':5,
-  'Josué':6,'Jueces':7,'Rut':8,
-  '1 Samuel':9,'1Samuel':9,'2 Samuel':10,'2Samuel':10,
-  '1 Reyes':11,'1Reyes':11,'2 Reyes':12,'2Reyes':12,
-  '1 Crónicas':13,'1Crónicas':13,'2 Crónicas':14,'2Crónicas':14,
-  'Esdras':15,'Nehemías':16,'Ester':17,
-  'Salmo':19,'Salmos':19,'Proverbios':20,
-  'Eclesiastés':21,'Cantares':22,'Cantar de los Cantares':22,
-  'Isaías':23,'Jeremías':24,'Lamentaciones':25,'Ezequiel':26,'Daniel':27,
-  'Oseas':28,'Joel':29,'Amós':30,'Abdías':31,'Jonás':32,
-  'Miqueas':33,'Nahúm':34,'Habacuc':35,'Sofonías':36,'Hageo':37,
-  'Zacarías':38,'Malaquías':39,
-  'Mateo':40,'Marcos':41,'Lucas':42,'Juan':43,'Hechos':44,'Romanos':45,
-  '1 Corintios':46,'1Corintios':46,'2 Corintios':47,'2Corintios':47,
-  'Gálatas':48,'Efesios':49,'Filipenses':50,'Colosenses':51,
-  '1 Tesalonicenses':52,'1Tesalonicenses':52,
-  '2 Tesalonicenses':53,'2Tesalonicenses':53,
-  '1 Timoteo':54,'1Timoteo':54,'2 Timoteo':55,'2Timoteo':55,
-  'Tito':56,'Filemón':57,'Hebreos':58,'Santiago':59,
-  '1 Pedro':60,'1Pedro':60,'2 Pedro':61,'2Pedro':61,
-  '1 Juan':62,'1Juan':62,'2 Juan':63,'2Juan':63,'3 Juan':64,'3Juan':64,
-  'Judas':65,'Apocalipsis':66,
-
-  // Turkish
-  'Yaratılış':1,"Mısır'dan Çıkış":2,'Mısırdan Çıkış':2,'Levililer':3,
-  'Çölde Sayım':4,'Yasanın Tekrarı':5,
-  'Yeşu':6,'Hakimler':7,'Rut':8,
-  '1 Samuel':9,'2 Samuel':10,'1 Krallar':11,'2 Krallar':12,
-  '1 Tarihler':13,'2 Tarihler':14,'Ezra':15,'Nehemya':16,'Ester':17,'Eyüp':18,
-  'Mezmurlar':19,'Mezmur':19,"Süleyman'ın Özdeyişleri":20,'Özdeyişler':20,
-  'Vaiz':21,'Ezgiler Ezgisi':22,
-  'Yeşaya':23,'Yeremya':24,'Ağıtlar':25,'Hezekiel':26,'Daniel':27,
-  'Hoşea':28,'Yoel':29,'Amos':30,'Ovadya':31,'Yunus':32,
-  'Mika':33,'Nahum':34,'Habakkuk':35,'Sefanya':36,'Hagay':37,
-  'Zekeriya':38,'Malaki':39,
-  'Matta':40,'Markos':41,'Luka':42,'Yuhanna':43,"Elçilerin İşleri":44,
-  'Romalılar':45,
-  '1 Korintliler':46,'2 Korintliler':47,
-  'Galatyalılar':48,'Efesliler':49,'Filipililer':50,'Koloseliler':51,
-  '1 Selanikliler':52,'2 Selanikliler':53,
-  '1 Timoteos':54,'2 Timoteos':55,'Titus':56,'Filimon':57,
-  'İbraniler':58,'Yakup':59,
-  '1 Petrus':60,'2 Petrus':61,
-  '1 Yuhanna':62,'2 Yuhanna':63,'3 Yuhanna':64,
-  'Yahuda':65,'Vahiy':66,
-
-  // Vietnamese
-  'Sáng thế ký':1,'Sáng-thế-ký':1,'Sáng thế':1,
-  'Xuất Ê-díp-tô ký':2,'Lê-vi ký':3,'Dân số ký':4,'Phục truyền luật lệ ký':5,
-  'Giô-suê':6,'Các quan xét':7,'Ru-tơ':8,
-  '1 Sa-mu-ên':9,'2 Sa-mu-ên':10,'1 Các vua':11,'2 Các vua':12,
-  '1 Sử ký':13,'2 Sử ký':14,'E-xơ-ra':15,'Nê-hê-mi':16,'Ê-xơ-tê':17,
-  'Gióp':18,'Thi thiên':19,'Thi Thiên':19,'Thi-thiên':19,
-  'Châm ngôn':20,'Truyền đạo':21,'Nhã ca':22,
-  'Ê-sai':23,'Giê-rê-mi':24,'Ca thương':25,'Ê-xê-chi-ên':26,'Đa-ni-ên':27,
-  'Ô-sê':28,'Giô-ên':29,'A-mốt':30,'Áp-đia':31,'Giô-na':32,
-  'Mi-chê':33,'Na-hum':34,'Ha-ba-cúc':35,'Sô-phô-ni':36,'A-ghê':37,
-  'Xa-cha-ri':38,'Ma-la-chi':39,
-  'Ma-thi-ơ':40,'Mác':41,'Lu-ca':42,'Giăng':43,'Công vụ':44,'Công vụ các sứ đồ':44,
-  'Rô-ma':45,
-  '1 Cô-rinh-tô':46,'2 Cô-rinh-tô':47,
-  'Ga-la-ti':48,'Ê-phê-sô':49,'Phi-líp':50,'Cô-lô-se':51,
-  '1 Tê-sa-lô-ni-ca':52,'2 Tê-sa-lô-ni-ca':53,
-  '1 Ti-mô-thê':54,'2 Ti-mô-thê':55,'Tít':56,'Phi-lê-môn':57,
-  'Hê-bơ-rơ':58,'Gia-cơ':59,
-  '1 Phi-e-rơ':60,'2 Phi-e-rơ':61,
-  '1 Giăng':62,'2 Giăng':63,'3 Giăng':64,
-  'Giu-đe':65,'Khải huyền':66,
-
-  // Persian
-  'پیدایش':1,'خروج':2,'لاویان':3,'اعداد':4,'تثنیه':5,
-  'یوشع':6,'داوران':7,'روت':8,
-  'اول سموئیل':9,'دوم سموئیل':10,'اول پادشاهان':11,'دوم پادشاهان':12,
-  'اول تواریخ':13,'دوم تواریخ':14,'عزرا':15,'نحمیا':16,'استر':17,'ایوب':18,
-  'مزامیر':19,'امثال':20,'جامعه':21,'غزل غزلها':22,
-  'اشعیا':23,'ارمیا':24,'مراثی':25,'حزقیال':26,'دانیال':27,
-  'هوشع':28,'یوئیل':29,'عاموس':30,'عوبدیا':31,'یونس':32,'یونا':32,
-  'میکاه':33,'میکا':33,'ناحوم':34,'حبقوق':35,'صفنیا':36,'حجی':37,
-  'زکریا':38,'ملاکی':39,
-  'متی':40,'مرقس':41,'لوقا':42,'یوحنا':43,'اعمال رسولان':44,
-  'رومیان':45,'اول قرنتیان':46,'دوم قرنتیان':47,
-  'غلاطیان':48,'افسسیان':49,'فیلیپیان':50,'کولسیان':51,
-  'اول تسالونیکیان':52,'دوم تسالونیکیان':53,
-  'اول تیموتائوس':54,'دوم تیموتائوس':55,'تیتوس':56,'فلیمون':57,
-  'عبرانیان':58,'یعقوب':59,
-  'اول پطرس':60,'دوم پطرس':61,
-  'اول یوحنا':62,'دوم یوحنا':63,'سوم یوحنا':64,
-  'یهودا':65,'مکاشفه':66,
-
-  // Myanmar
-  'ကမ္ဘာဦးကျမ်း':1,'ကမ္ဘာဦး':1,
-  'ထွက်မြောက်ရာ':2,'ဝတ်ပြုရာ':3,'တောလည်ရာ':4,'တရားဟောရာ':5,
-  'ယောရှု':6,'တရားသူကြီးများ':7,'ရုသ':8,
-  '၁ဓမ္မရာဇဝင်':9,'၂ဓမ္မရာဇဝင်':10,
-  '၃ဓမ္မရာဇဝင်':11,'၄ဓမ္မရာဇဝင်':12,
-  '၁ရာဇဝင်ချုပ်':13,'၂ရာဇဝင်ချုပ်':14,
-  'ဧဇရ':15,'နေဟမိ':16,'ဧသတာ':17,'ယောဘ':18,
-  'ဆာလံကျမ်း':19,'ဆာလံ':19,'သုတ္တံကျမ်း':20,'သုတ္တံ':20,
-  'ဒေသနာကျမ်း':21,'ရှောလမုန်သီချင်း':22,
-  'ဟေရှာယ':23,'ယေရမိ':24,'မြည်တမ်းစကား':25,
-  'ယေဇကျေလ':26,'ဒံယေလ':27,
-  'ဟောရှေ':28,'ယောလ':29,'အာမုတ်':30,'ဩဗဒိ':31,'ယောန':32,
-  'မိက္ခာ':33,'နာဟုံ':34,'ဟဗက္ကုတ်':35,'ဇေဖနိ':36,
-  'ဟဂ္ဂဲ':37,'ဇာခရိ':38,'မာလခိ':39,
-  'မဿဲ':40,'မာကု':41,'လုကာ':42,'ယောဟန်':43,
-  'တမန်တော်':44,'တမန်':44,'ရောမ':45,
-  '၁ကောရိန္သု':46,'၂ကောရိန္သု':47,
-  'ဂလာတိ':48,'ဂလ':48,'ဧဖက်':49,'ဖိလိပ္ပိ':50,'ဖိ':50,'ကောလောသဲ':51,
-  '၁သက်သာလောနိတ်':52,'၂သက်သာလောနိတ်':53,
-  '၁တိမောသေ':54,'၂တိမောသေ':55,'တိတု':56,'ဖိလေမုန်':57,
-  'ဟေဗြဲ':58,'ယာကုပ်':59,
-  '၁ပေတရု':60,'၂ပေတရု':61,
-  '၁ယောဟန်':62,'၂ယောဟန်':63,'၃ယောဟန်':64,
-  'ယုဒ':65,'ဗျာဒိတ်ကျမ်း':66,'ဗျာ':66,
-
-  // ── Additional abbreviated / variant forms observed in the verse files
-  // (each ambiguous abbreviation has been disambiguated by inspecting the
-  // actual verse text in its source file).
-
-  // Japanese — bare / "第N" form variants
-  'ヨハネ':43,'ローマ':45,'使徒':44,'黙示録':66,
-  '第1コリント':46,'第2コリント':47,
-  '第1テサロニケ':52,'第2テサロニケ':53,
-  '第1テモテ':54,'第2テモテ':55,
-  '第1ペテロ':60,'第2ペテロ':61,
-  '第1ヨハネ':62,'第2ヨハネ':63,'第3ヨハネ':64,
-
-  // Persian — short forms used in some verse files
-  '1یوح':62,'2یوح':63,'3یوح':64,
-  '1قر':46,'2قر':47,
-  '1پط':60,'2پط':61,
-  '1تس':52,'2تس':53,
-  '1تیم':54,'2تیم':55,
-
-  // Vietnamese — additional abbreviated forms
-  'Phục-truyền':5,'Phục truyền':5,
-  'Ê':49,    // Ê-phê-sô (Ephesians) — confirmed via imm-vi verse texts
-  'Xo':36,   // Sô-phô-ni / Xô-phô-ni (Zephaniah) — confirmed via "Xo 3:17" content
-  'Châm-ngôn':20,
-
-  // Myanmar — bare / digit-prefixed short forms observed in imm-my,
-  // power-of-words-my, css-my sets
-  'ဧ':49,    // ဧဖက် (Ephesians) — confirmed via "ဧ 1:5" predestination content
-  'ယော':43,  // ယောဟန် (John) — confirmed via "ယော 1:12" children-of-God content
-  'ယေ':24,   // ယေရမိ (Jeremiah) — confirmed via "ယေ 31:3" everlasting-love content
-  'ရော':45,  // ရောမ (Romans) — confirmed via "ရော 8:15" abba-father content
-  '1 ယော':62,'1ယော':62,'2 ယော':63,'2ယော':63,'3 ယော':64,'3ယော':64,
-  '1 ပေ':60,'1ပေ':60,'2 ပေ':61,'2ပေ':61,
-  '1 ကော':46,'1ကော':46,'2 ကော':47,'2ကော':47,
-  '1 ကောရိန္သု':46,'2 ကောရိန္သု':47,
-  '1 ပေတရု':60,'2 ပေတရု':61,
-
-  // Arabic (SVD) — keep distinct from Persian. Arabic refs use ASCII or
-  // Arabic-Indic digits (asciifyDigits handles the latter). Spellings here
-  // mirror what verses_ar.js emits via the Arabic book-name map.
-  'تكوين':1,'خروج':2,'لاويين':3,'عدد':4,'تثنية':5,
-  'يشوع':6,'قضاة':7,'راعوث':8,
-  '1صموئيل':9,'2صموئيل':10,
-  '1ملوك':11,'2ملوك':12,
-  '1أخبار':13,'2أخبار':14,
-  'عزرا':15,'نحميا':16,'أستير':17,'أيوب':18,
-  'مزامير':19,'المزامير':19,'أمثال':20,'الأمثال':20,
-  'جامعة':21,'الجامعة':21,'نشيد الأنشاد':22,
-  'إشعياء':23,'أشعياء':23,'إرميا':24,'ارميا':24,
-  'مراثي إرميا':25,'مراثي':25,
-  'حزقيال':26,'دانيال':27,
-  'هوشع':28,'يوئيل':29,'عاموس':30,'عوبديا':31,
-  'يونان':32,'يونس':32,'ميخا':33,'ناحوم':34,'حبقوق':35,
-  'صفنيا':36,'حجي':37,'زكريا':38,'ملاخي':39,'ملاكي':39,
-  'متى':40,'مرقس':41,'لوقا':42,'يوحنا':43,
-  'أعمال الرسل':44,'الأعمال':44,
-  'رومية':45,'الرومية':45,
-  '1كورنثوس':46,'2كورنثوس':47,
-  '1كورنثوس':46,'2كورنثوس':47,
-  'غلاطية':48,'أفسس':49,'الأفسس':49,
-  'فيلبي':50,'كولوسي':51,'كولوسى':51,
-  '1تسالونيكي':52,'2تسالونيكي':53,
-  '1تيموثاوس':54,'2تيموثاوس':55,
-  'تيطس':56,'فليمون':57,
-  'عبرانيين':58,'العبرانيين':58,
-  'يعقوب':59,
-  '1بطرس':60,'2بطرس':61,
-  '1يوحنا':62,'2يوحنا':63,'3يوحنا':64,
-  'يهوذا':65,'رؤيا يوحنا':66,'الرؤيا':66,'رؤيا':66,
-};
-
-// Persian/Arabic-Indic digit conversion: bolls / verse files write
-// references like "یوحنا ۱:۱" (verse 1:1). The verseMatch regex uses
-// ASCII `\d`, so the chapter:verse part fails. Convert these digits to
-// ASCII first so the rest of the normalizer works unchanged.
-function asciifyDigits(s) {
-  if (!s) return s;
-  return s
-    .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))  // Arabic-Indic
-    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0))  // Persian (Extended Arabic-Indic)
-    .replace(/[၀-၉]/g, d => String(d.charCodeAt(0) - 0x1040)); // Myanmar
-}
-
-// Forgiving lookup key: lowercase + asciify digits + strip all hyphens,
-// whitespace, dots, and ASCII apostrophes. Collapses "1 Mose", "1.Mose",
-// "1. Mose" → "1mose"; "Sáng-thế-ký" / "Sáng thế ký" / "Sáng-thế Ký" →
-// "sángthếký"; "၁ကောရိန္သု", "1 ကောရိန္သု", "1ကောရိန္သု" → "1ကောရိန္သု".
-// Korean is left alone because its char-based numerals (일/이/삼) are not
-// digits — handled by explicit entries below.
-function normalizeBookKey(s) {
-  if (!s) return '';
-  return asciifyDigits(String(s).toLowerCase()).replace(/[-\s.'']+/g, '');
-}
-
-// Pre-built normalized lookup tables — one lookup, no per-call cost. The
-// raw maps above are kept for clarity / explicit-form lookups; these
-// catch case/spacing/hyphen/digit variants automatically.
-const HEBREW_FULL_BOOK_ID_NORM = Object.fromEntries(
-  Object.entries(HEBREW_FULL_BOOK_ID).map(([k, v]) => [normalizeBookKey(k), v])
-);
-const KOREAN_FULL_BOOK_ID_NORM = Object.fromEntries(
-  Object.entries(KOREAN_FULL_BOOK_ID).map(([k, v]) => [normalizeBookKey(k), v])
-);
-const MULTILANG_FULL_BOOK_ID_NORM = Object.fromEntries(
-  Object.entries(MULTILANG_FULL_BOOK_ID).map(([k, v]) => [normalizeBookKey(k), v])
-);
-
-// Additional Korean numeric-form variants — verse files sometimes write
-// "요한1서" (digit) instead of "요한일서" (Sino-Korean numeral 일/이/삼).
-// normalizeBookKey can't collapse 일↔1 without a deeper numeral table, so
-// we list both forms explicitly.
-const KOREAN_NUMERIC_VARIANTS = {
-  '사무엘1서':9,'사무엘2서':10,'열왕기1':11,'열왕기2':12,
-  '역대1':13,'역대2':14,'고린도1서':46,'고린도2서':47,
-  '데살로니가1서':52,'데살로니가2서':53,
-  '디모데1서':54,'디모데2서':55,
-  '베드로1서':60,'베드로2서':61,
-  '요한1서':62,'요한2서':63,'요한3서':64,
-};
-for (const [k, v] of Object.entries(KOREAN_NUMERIC_VARIANTS)) {
-  KOREAN_FULL_BOOK_ID_NORM[normalizeBookKey(k)] = v;
-}
-
-function lookupFullBookId(bookPart) {
-  if (!bookPart) return undefined;
-  const raw = bookPart;
-  const trimmed = bookPart.trim();
-  const key = normalizeBookKey(bookPart);
-  return (
-    HEBREW_FULL_BOOK_ID[raw] ?? HEBREW_FULL_BOOK_ID[trimmed] ?? HEBREW_FULL_BOOK_ID_NORM[key]
-    ?? KOREAN_FULL_BOOK_ID[raw] ?? KOREAN_FULL_BOOK_ID[trimmed] ?? KOREAN_FULL_BOOK_ID_NORM[key]
-    ?? MULTILANG_FULL_BOOK_ID[raw] ?? MULTILANG_FULL_BOOK_ID[trimmed] ?? MULTILANG_FULL_BOOK_ID_NORM[key]
-  );
-}
-
-// Convert a Hebrew gematria string (e.g. "יב" → 12, "כא" → 21) to a number.
-// Returns null if the string contains non-Hebrew-letter characters.
-function hebrewLettersToNumber(s) {
-  const values = {
-    א:1, ב:2, ג:3, ד:4, ה:5, ו:6, ז:7, ח:8, ט:9,
-    י:10, כ:20, ל:30, מ:40, נ:50, ס:60, ע:70, פ:80, צ:90,
-    ק:100, ר:200, ש:300, ת:400,
-    ך:20, ם:40, ן:50, ף:80, ץ:90  // final letter forms
-  };
-  if (!s) return null;
-  let total = 0;
-  for (const ch of s) {
-    const v = values[ch];
-    if (!v) return null;
-    total += v;
-  }
-  return total > 0 ? total : null;
-}
-
-// One chapter/verse component of a Hebrew reference. Accepts plain digits, or a
-// letter numeral with or without the gershayim/geresh that marks it as a number
-// (נ״ח, נ"ח, נח all → 58). Returns null for anything else, so a caller can tell
-// "not a number" apart from a real 0.
-function hebrewOrArabicNumber(token) {
-  const raw = String(token || '').trim();
-  if (!raw) return null;
-  if (/^\d+$/.test(raw)) return Number(raw);
-  const bare = raw.replace(/['"׳״‘’“”]/g, '');
-  if (!bare || !/^[א-ת]+$/.test(bare)) return null;
-  return hebrewLettersToNumber(bare);
-}
-
+// Labels in 聽&說 are free text (第 1 段, Part 1, 靜夜思 · 李白 ①…): key them by a
+// whitespace/dash-normalised, case-folded form so lookups tolerate spacing.
 function normalizeVerseReferenceKey(reference = '') {
-  // asciifyDigits unlocks Persian/Arabic-Indic/Myanmar references whose
-  // chapter:verse uses non-ASCII digits — without it the verseMatch regex
-  // (`\d`) fails and these languages never normalize.
-  const value = asciifyDigits(String(reference || ''))
-    .replace(/[–—]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!value) return '';
-
-  // Hebrew letter-numeral refs — convert gematria to Arabic digits so the rest
-  // of the pipeline can normalize them like any other reference. This is what
-  // unlocks ESV/KJV/NIV API fetches for Hebrew-primary bilingual mode.
-  //
-  // The chapter and the verse are independent: either may be letters or digits,
-  // and letter numerals usually carry the gershayim that conventionally marks
-  // them as a number. The daily verse arrives as "ישעיהו נ״ח:11" — letters WITH
-  // gershayim on one side, digits on the other. The earlier version demanded
-  // letters on BOTH sides and no gershayim, so that shape returned '' and the
-  // bilingual secondary silently rendered nothing at all.
-  const heRefMatch = value.match(/^(.+?)\s+(\S+)\s*[:׃]\s*(\S+)$/u);
-  if (heRefMatch) {
-    const bookRaw = heRefMatch[1].trim();
-    const bookId = HEBREW_FULL_BOOK_ID[bookRaw] ?? BIBLE_BOOKS.find(b => b.he === bookRaw)?.id;
-    if (bookId) {
-      const chap = hebrewOrArabicNumber(heRefMatch[2]);
-      const versePart = heRefMatch[3].split('-').map(p => hebrewOrArabicNumber(p));
-      if (chap && versePart.length && versePart.every(n => n != null)) {
-        return `${bookId}|${chap}:${versePart.join('-')}`;
-      }
-    }
-  }
-
-  const verseMatch = value.match(/(\d+)\s*:\s*([\d,\-\s]+)/);
-  if (!verseMatch) {
-    // Try chapter-only reference: "Psalm 35", "詩篇 35", "Proverbs 1"
-    // Pattern: optional leading digit (for "1 Kings"), book name(s), then chapter number at end
-    const chapMatch = value.match(/^(\d\s+)?([^\d]+?)\s+(\d+)$/);
-    if (chapMatch) {
-      const numPrefix = chapMatch[1] ? chapMatch[1].trim() : '';
-      const bookRaw = (numPrefix + chapMatch[2]).trim();
-      const normalizedBookRaw = bookRaw.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
-      const book = BIBLE_BOOKS.find(b => {
-        const names = [
-          ...(b.names || []),
-          ...(b.cn || []),
-          b.ja, b.ko, b.es, b.de, b.tr, b.fa, b.ar, b.he, b.my, b.vi, b.idn, b.msy, b.pt, b.fr, b.ru, b.hi
-        ].filter(Boolean);
-        return names.some(name => {
-          const n = String(name).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
-          return normalizedBookRaw === n || normalizedBookRaw.endsWith(` ${n}`);
-        });
-      });
-      const bookId = book?.id ?? lookupFullBookId(bookRaw);
-      if (bookId) return `${bookId}|${chapMatch[3]}`;
-    }
-    return value.toLowerCase();
-  }
-
-  const bookPart = value.slice(0, verseMatch.index).trim().replace(/[：:]+$/, '');
-  const normalizedBookPart = bookPart.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
-  const book = BIBLE_BOOKS.find(b => {
-    const names = [
-      ...(b.names || []),
-      ...(b.cn || []),
-      b.ja,
-      b.ko,
-      b.es,
-      b.de,
-      b.tr,
-      b.fa,
-      b.ar,
-      b.he,
-      b.my,
-      b.vi,
-      b.idn,
-      b.msy,
-      b.pt,
-      b.fr,
-      b.ru,
-      b.hi
-    ].filter(Boolean);
-    return names.some(name => {
-      const normalizedName = String(name).toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
-      return normalizedBookPart === normalizedName || normalizedBookPart.endsWith(` ${normalizedName}`);
-    });
-  });
-  const chapterVerse = `${verseMatch[1]}:${verseMatch[2].replace(/\s+/g, '')}`;
-  // If not found via BIBLE_BOOKS, try the full Hebrew name lookup table
-  const bookId = book?.id ?? lookupFullBookId(bookPart);
-  return `${bookId || normalizedBookPart}|${chapterVerse}`;
-}
-
-// Parse a reference-shaped string ("詩篇 150", "詩 150", "Psalms 150:6") into a
-// comparable { bookId, chapter, verses } via normalizeVerseReferenceKey, which
-// already unifies book abbreviations across every language in BIBLE_BOOKS.
-// Returns null when the string doesn't resolve to a real book + chapter.
-function parseScriptureKey(ref) {
-  const key = normalizeVerseReferenceKey(ref);
-  const m = /^(\d+)\|(\d+)(?::([\d,\-\s]+))?$/.exec(key);
-  if (!m) return null;
-  return { bookId: parseInt(m[1], 10), chapter: parseInt(m[2], 10), verses: m[3] ? m[3].trim() : null };
-}
-
-// Parse a chapter range out of a verse-set title ("詩篇 107-150",
-// "Psalms 107-150 (KJV)") into { bookId, start, end }, resolving the book from
-// the text before the range by reusing parseScriptureKey. Returns null when the
-// title has no chapter range or the leading text isn't a recognizable book.
-function parseSetChapterRange(title) {
-  if (!title) return null;
-  const norm = asciifyDigits(String(title)).replace(/[–—]/g, '-');
-  const m = norm.match(/(\d+)\s*-\s*(\d+)/);
-  if (!m) return null;
-  const start = parseInt(m[1], 10);
-  const end = parseInt(m[2], 10);
-  if (!(start >= 1 && end >= start)) return null;
-  const before = norm.slice(0, m.index).trim();
-  if (!before) return null;
-  const candidates = [before, before.split(/\s+/)[0]];
-  for (const c of candidates) {
-    if (!c) continue;
-    const k = parseScriptureKey(`${c} ${start}`);
-    if (k && k.chapter === start) return { bookId: k.bookId, start, end };
-  }
-  return null;
+  return String(reference || '').replace(/[–—]/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function findMatchingVerse(primaryVerse, primaryVerses = [], secondaryVerses = [], options = {}) {
@@ -3061,32 +2167,16 @@ function VerseSetContinuousRainPlayer({
     }
 
     const normalizedKey = normalizeVerseReferenceKey(currentVerse.reference);
-    if (!normalizedKey) { setLookedUpText(''); setLookedUpRef(''); return; }
-
-    // 1) Search all loaded verse sets in the secondary language (instant, real Bible text).
-    //    Validate that the text is actually in the expected script — verse sets sometimes contain
-    //    wrong-language text (e.g. KJV English stored in a Hebrew-labelled set).
-    const localMatch = secondaryVerseByRef.get(normalizedKey);
+    // Search all loaded sets in the secondary language; 聽&說 items otherwise carry
+    // their own second language, so there is nothing else to look up.
+    const localMatch = normalizedKey ? secondaryVerseByRef.get(normalizedKey) : null;
     if (localMatch && isTextLikelyForVersion(localMatch.text, secondaryVersion)) {
       setLookedUpText(localMatch.text);
       setLookedUpRef(localMatch.reference);
-      // Also persist to localStorage for future sessions
-      setCachedBibleVerse(secondaryVersion, normalizedKey, localMatch.text);
       return;
     }
-
-    // 2) Check localStorage cache (previously found verses) — validate script too
-    const cached = getCachedBibleVerse(secondaryVersion, normalizedKey);
-    if (cached && isTextLikelyForVersion(cached, secondaryVersion)) {
-      setLookedUpText(cached);
-      setLookedUpRef(formatVerseReferenceForDisplay(currentVerse.reference, secondaryVersion));
-      return;
-    }
-
-    // 3) Nothing else to try — 聽&說 items carry their own second language.
     setLookedUpText('');
     setLookedUpRef('');
-    return () => { cancelled = true; };
   }, [currentVerse, secondaryVerse, secondaryVersion, secondaryVerseByRef]);
 
   const effectiveSecondaryPhrases = useMemo(() => {
@@ -4669,25 +3759,6 @@ const findVerseByRef = (allVerses, ref) => {
     const refTrim = ref.replace(/\s+/g, '');
     target = allVerses.find(v => v.reference.replace(/\s+/g, '') === refTrim);
 
-    if (!target && refTrim.includes(':')) {
-      const match = refTrim.match(/^(.*?)(\d+:\d+(-\d+)?)$/);
-      if (match) {
-        const bookStr = match[1];
-        const cvStr = match[2];
-        const bookObj = BIBLE_BOOKS.find(b =>
-          b.names.includes(bookStr) || b.ja === bookStr || b.ko === bookStr || (b.names[3] === bookStr)
-        );
-        target = allVerses.find(v => {
-          const vTrim = v.reference.replace(/\s+/g, '');
-          if (!vTrim.endsWith(cvStr)) return false;
-          const vBookStr = vTrim.replace(cvStr, '');
-          if (bookObj) {
-            return bookObj.names.includes(vBookStr) || bookObj.ja === vBookStr || bookObj.ko === vBookStr || (bookObj.names[3] === vBookStr);
-          }
-          return vTrim[0] === bookStr[0];
-        });
-      }
-    }
   }
   return target;
 };
@@ -4835,22 +3906,6 @@ const extractVerseSetTopic = (title = '') => {
 };
 
 const getFirstTopicChar = (topic = '') => Array.from(topic.trim())[0] || '';
-const CHINESE_BOOK_MAP = {
-  '創': '創世記', '出': '出埃及記', '利': '利未記', '民': '民數記', '申': '申命記',
-  '書': '約書亞記', '士': '士師記', '得': '路得記', '撒上': '撒母耳記上', '撒下': '撒母耳記下',
-  '王上': '列王紀上', '王下': '列王紀下', '代上': '歷代志上', '代下': '歷代志下',
-  '拉': '以斯拉記', '尼': '尼希米記', '斯': '以斯帖記', '伯': '約伯記', '詩': '詩篇',
-  '箴': '箴言', '傳': '傳道書', '歌': '雅歌', '賽': '以賽亞書', '耶': '耶利米書',
-  '哀': '耶利米哀歌', '結': '以西結書', '但': '但以理書', '何': '何西阿書', '珥': '約珥書',
-  '摩': '阿摩司書', '俄': '俄巴底亞書', '拿': '約拿書', '彌': '彌迦書', '鴻': '那鴻書',
-  '哈': '哈巴谷書', '番': '西番雅書', '該': '哈該書', '亞': '撒迦利亞書', '瑪': '瑪拉基書',
-  '太': '馬太福音', '可': '馬可福音', '路': '路加福音', '約': '約翰福音', '徒': '使徒行傳',
-  '羅': '羅馬書', '林前': '哥林多前書', '林後': '哥林多後書', '加': '加拉太書', '弗': '以弗所書',
-  '腓': '腓立比書', '西': '歌羅西書', '帖前': '帖撒羅尼迦前書', '帖後': '帖撒羅尼迦後書',
-  '提前': '提摩太前書', '提後': '提摩太後書', '多': '提多書', '門': '腓利門書', '來': '希伯來書',
-  '雅': '雅各書', '彼前': '彼得前書', '彼後': '彼得後書', '約一': '約翰一書', '約二': '約翰二書',
-  '約三': '約翰三書', '猶': '猶大書', '啟': '啟示錄'
-};
 
 // Maps normalized English book key → localized abbreviation by language code
 // Key: lowercase English book name/abbreviation (no spaces, no periods, number prefix attached)
@@ -4987,56 +4042,9 @@ const ENGLISH_BOOK_LOCALIZATION_MAP = {
   'rev':            { vi:'Kh',   ko:'계',   ja:'黙',    es:'Ap',   de:'Offb', tr:'Vah', fa:'مک',      he:'חז',   my:'ဗျာဒိတ်' },
 };
 
-function formatVerseReferenceForDisplay(ref, version) {
-  // 聽&說 labels (第 1 段, Part 1, 靜夜思 · 李白 …) are not scripture references — show them as-is.
-  if (!ref || !parseScriptureKey(String(ref))?.bookId) return String(ref || '');
-  // Chinese: expand abbreviation to full book name
-  if (version === 'cuv' || version === 'zh' || version === 'cuvs') {
-    const match = ref.match(/(.+?)\s*(\d+)(?:\s*:\s*([\d,\s\-–]+))?/);
-    if (!match) return ref;
-    const book = match[1].trim();
-    const chapter = match[2];
-    const verses = match[3];
-    let fullBookName = CHINESE_BOOK_MAP[book];
-    // Fallback: English abbreviation → look up via BIBLE_BOOKS
-    if (!fullBookName) {
-      const lowerBook = book.toLowerCase().replace(/\./g, '');
-      const found = BIBLE_BOOKS.find(b =>
-        (b.names || []).some(n => n.toLowerCase().replace(/\./g, '').replace(/\s+/g, '') === lowerBook)
-      );
-      if (found) {
-        fullBookName = version === 'cuvs' ? (found.cn?.[0] || found.names[0]) : found.names[0];
-      }
-    }
-    if (!fullBookName) fullBookName = book;
-    const chapterSuffix = fullBookName === '詩篇' || fullBookName === '诗篇' ? '篇' : '章';
-    if (verses) return `${fullBookName} ${chapter}:${verses}`;
-    return `${fullBookName} ${chapter}${chapterSuffix}`;
-  }
-
-  // For localized non-English versions: translate English book abbreviation
-  const LOCALIZED_LANGS = ['vi','ko','ja','es','de','tr','fa','ar','he','my'];
-  if (LOCALIZED_LANGS.includes(version)) {
-    // Parse: optional leading digit(s) (1/2/3) immediately attached or space-separated from book
-    // Handles: "Eph 3:19", "1Thessalonians 4:16", "2 Cor 4:17", "Ps 23:1-6"
-    const m = ref.match(/^(\d+\s*)([A-Za-z]+)\s+(.+)$/) || ref.match(/^([A-Za-z]+)\s+(.+)$/);
-    if (m) {
-      let key, chapterVerse;
-      if (m.length === 4) {
-        // Numbered book: m[1]=number, m[2]=bookName, m[3]=chapterVerse
-        key = m[1].trim() + m[2].toLowerCase().replace(/\./g, '');
-        chapterVerse = m[3].trim();
-      } else {
-        // Non-numbered book: m[1]=bookName, m[2]=chapterVerse
-        key = m[1].toLowerCase().replace(/\./g, '');
-        chapterVerse = m[2].trim();
-      }
-      const localizedBook = ENGLISH_BOOK_LOCALIZATION_MAP[key]?.[version];
-      if (localizedBook) return `${localizedBook} ${chapterVerse}`;
-    }
-  }
-
-  return ref;
+// 聽&說 labels are shown exactly as the author wrote them.
+function formatVerseReferenceForDisplay(ref) {
+  return String(ref || '');
 }
 
 // 1 → 一, 23 → 二十三, 119 → 一百一十九 … (for spoken references).
@@ -5067,72 +4075,8 @@ function humanizeChineseReferencesForSpeech(text) {
   );
 }
 
-function formatVerseReferenceForSpeech(ref, version) {
-  // 聽&說 labels (第 1 段, Part 1, 靜夜思 · 李白 …) are not scripture references — show them as-is.
-  if (!ref || !parseScriptureKey(String(ref))?.bookId) return String(ref || '');
-  const match = ref.match(/(.+?)\s*(\d+)(?:\s*:\s*([\d,\s\-–]+))?/);
-  if (!match) return ref;
-  const book = match[1].trim();
-  const chapter = match[2];
-  const verses = match[3];
-
-  if (isEnglishBibleVersion(version)) {
-    if (!verses) return `${book} chapter ${chapter}`;
-    const versesStr = verses.replace(/-/g, ' to ').replace(/–/g, ' to ').trim();
-    const isPlural = versesStr.includes('to') || versesStr.includes(',');
-    return `${book} chapter ${chapter}, verse${isPlural ? 's' : ''} ${versesStr}`;
-  } else if (version === 'ko') {
-    if (!verses) return `${book} ${chapter}장`;
-    const versesStr = verses.replace(/-/g, '에서 ').replace(/–/g, '에서 ').trim();
-    return `${book} ${chapter}장 ${versesStr}절`;
-  } else if (version === 'ja') {
-    if (!verses) return `${book} 第${chapter}章`;
-    const versesStr = verses.replace(/-/g, 'から ').replace(/–/g, 'から ').trim();
-    return `${book} 第${chapter}章 ${versesStr}節`;
-  } else if (version === 'fa') {
-    if (!verses) return `${book} فصل ${chapter}`;
-    const versesStr = verses.replace(/-/g, ' تا ').replace(/–/g, ' تا ').trim();
-    return `${book} فصل ${chapter} آیه ${versesStr}`;
-  } else if (version === 'ar') {
-    // Arabic Bible reference convention: "<book> الإصحاح <chap> الآية <verse>".
-    // Without this branch Arabic falls through to the Chinese formatter and
-    // gets back a mixed Arabic/Chinese string ("تكوين第一章..."), which iOS
-    // TTS announces by saying "Arabic" as the language-switch label every
-    // time it crosses script boundaries.
-    if (!verses) return `${book} الإصحاح ${chapter}`;
-    const versesStr = verses.replace(/-/g, ' إلى ').replace(/–/g, ' إلى ').trim();
-    const isPlural = versesStr.includes(' إلى ') || versesStr.includes(',');
-    return `${book} الإصحاح ${chapter} ${isPlural ? 'الآيات' : 'الآية'} ${versesStr}`;
-  } else if (version === 'he') {
-    if (!verses) return `${book} פרק ${chapter}`;
-    const versesStr = verses.replace(/-/g, ' עד ').replace(/–/g, ' עד ').trim();
-    return `${book} פרק ${chapter} פסוק ${versesStr}`;
-  } else {
-    // Chinese (cuv, default)
-    let fullBookName = CHINESE_BOOK_MAP[book];
-    if (!fullBookName) {
-      const lowerBook = book.toLowerCase().replace(/\./g, '');
-      const found = BIBLE_BOOKS.find(b =>
-        (b.names || []).some(n => n.toLowerCase().replace(/\./g, '').replace(/\s+/g, '') === lowerBook)
-      );
-      if (found) fullBookName = found.names[0];
-    }
-    if (!fullBookName) fullBookName = book;
-    const chapterSuffix = fullBookName === '詩篇' || fullBookName === '诗篇' ? '篇' : '章';
-
-    if (!verses) {
-      return `${fullBookName}第${toChineseNumber(chapter)}${chapterSuffix}`;
-    }
-
-    const versesStr = verses
-      .replace(/\s+/g, '')
-      .replace(/-/g, '至')
-      .replace(/–/g, '至')
-      .replace(/,/g, '、')
-      .replace(/\d+/g, (num) => toChineseNumber(num))
-      .trim();
-    return `${fullBookName}第${toChineseNumber(chapter)}${chapterSuffix}第${versesStr}節`;
-  }
+function formatVerseReferenceForSpeech(ref) {
+  return String(ref || '');
 }
 
 // Rows opened in the editor: label + both language sides. (Kept under the
@@ -6126,59 +5070,8 @@ export default function App() {
     setMusicUploadBusy(false);
   };
 
-  // 批次匯入出處 — paste references (one per line, e.g.「太 19:14」),
-  // match the book against the dictionary, auto-fetch each verse's text.
-  const [bulkImportState, setBulkImportState] = useState(null); // null | { text, busy, progress, failed }
-
-  // Match a pasted line's leading book token against every known book name:
-  // Chinese full/abbr + simplified, English full/abbr, the current language's
-  // abbreviation (e.g. Spanish "Sal"), and the full-name maps that carry
-  // Spanish/Korean/Japanese/German/… full names ("Salmos", "시편", "詩篇").
-  // Longest name wins so 「約翰一書」 beats 「約」 and "1 Juan" beats "Juan".
-  // Returns { bookInfo, name, rest } or null.
-  const bookById = (id) => BIBLE_BOOKS.find(b => b.id === id);
-  const matchBookInLine = (line) => {
-    // NFC-normalize so decomposed accents (NFD, common in macOS paste — "Éxodo"
-    // as E+◌́) match the composed forms in the book-name maps. Also fold
-    // full-width and non-breaking spaces to a plain space.
-    const norm = String(line).normalize('NFC').replace(/[　 ]+/g, ' ').trim();
-    let best = null;
-    const consider = (name, bookInfo) => {
-      if (!name || !bookInfo || !norm.startsWith(name)) return;
-      const rest = norm.slice(name.length).trim();
-      if (/^\d/.test(rest) && (!best || name.length > best.name.length)) {
-        best = { bookInfo, name, rest };
-      }
-    };
-    for (const b of BIBLE_BOOKS) {
-      for (const name of [...(b.names || []), ...(b.cn || []), getBookAbbr(b, version)]) {
-        consider(name, b);
-      }
-    }
-    // Full-name maps — one entry per spelling → book id.
-    for (const map of [MULTILANG_FULL_BOOK_ID, KOREAN_FULL_BOOK_ID]) {
-      for (const name in map) consider(name, bookById(map[name]));
-    }
-    return best ? { bookInfo: best.bookInfo, name: best.name, rest: best.rest } : null;
-  };
-
-  // Fetch a verse's text for (book, "ch:vs[-vs]") — local DB first, then
-  // the same remote fallbacks the single-row editor uses. Returns ''.
-  const fetchVerseTextByBook = async (bookInfo, sanitized) => {
-    if (!/^\d/.test(sanitized)) return '';
-    const bookAbbr = getBookAbbr(bookInfo, version);
-    const refStr = `${bookAbbr} ${sanitized}`;
-    // 1) Local language DB (fast path when the verse already ships with the app).
-    const db = loadedLangs[version]?.verses || [];
-    const sanitizeRef = (str) => str.toString().replace(/\s+/g, '').replace(/[–—~]/g, '-').replace(/[：]/g, ':').toLowerCase();
-    const searchRef = sanitizeRef(refStr);
-    for (const dbVerse of db) {
-      if (!dbVerse.reference) continue;
-      if (sanitizeRef(dbVerse.reference) === searchRef) return dbVerse.text || '';
-    }
-    // 2) Remote — language-aware (English APIs / bolls-per-language / getbible).
-    return await fetchEditorVerseText({ bookInfo, sanitized, version });
-  };
+  // 貼上全文對照匯入 — Chinese / English paragraphs pasted side by side.
+  const [bulkImportState, setBulkImportState] = useState(null); // null | { zh, en }
 
   const runBulkImport = async () => {
     const zh = splitParagraphs(bulkImportState?.zh);
@@ -6219,7 +5112,6 @@ export default function App() {
       .catch(() => { if (!cancelled) setEditorVerseVoices({}); });
     return () => { cancelled = true; };
   }, [editingCustomSet?.id]);
-  const [bookPickerIdx, setBookPickerIdx] = useState(null); // which verse row has the book picker open
   // Two-tap delete confirm for verse rows: first tap arms (shows 確定?), second
   // tap removes. In-app (no window.confirm — that's a silent no-op in iOS WKWebView).
   const [confirmDeleteIdx, setConfirmDeleteIdx] = useState(null);
@@ -6830,20 +5722,10 @@ export default function App() {
 
   const dummySet = useMemo(() => [{
     id: "dummy",
-    title: version === 'ja' ? '経文セットが見つかりません'
-      : version === 'ko' ? '성경 구절 세트를 찾을 수 없습니다'
-        : isEnglishBibleVersion(version) ? 'No Verse Sets Found'
-          : version === 'fa' ? 'مجموعه‌ای یافت نشد'
-            : version === 'he' ? 'לא נמצא סט פסוקים'
-              : '尚未發現內容集',
+    title: isEnglishBibleVersion(version) ? 'No Collections Found' : '尚未發現內容集',
     authorName: "System",
     verses: [{
-      reference: "N/A", text: version === 'ja' ? '現在この言語には経文セットがありません。👑 マイ問題集から作成してください。'
-        : version === 'ko' ? '현재 이 언어에 대한 구절 세트가 없습니다. 👑 내 문제집에서 만드십시오.'
-          : isEnglishBibleVersion(version) ? 'There are no verse sets for this language yet. Create one in 👑 Custom Sets.'
-            : version === 'fa' ? 'هنوز مجموعه‌ای برای این زبان وجود ندارد.'
-              : version === 'he' ? 'עדיין אין סטי פסוקים לשפה זו.'
-                : '目前此語言沒有內容集。請去 👑 我的內容集 中建立！'
+      reference: "N/A", text: isEnglishBibleVersion(version) ? 'There are no collections for this language yet. Create one in 👑 My Collections.' : '目前此語言沒有內容集。請去 👑 我的內容集 中建立！'
     }]
   }], [version]);
 
@@ -7097,7 +5979,7 @@ export default function App() {
 
       let targetVerses = data?.verses || [];
       if (targetVerses.length === 0) {
-        targetVerses = [{ reference: "N/A", text: newVer === 'fa' ? 'آیه‌ای یافت نشد.' : (newVer === 'he' ? 'לא נמצא פסוק.' : (newVer === 'ja' ? '経文が見つかりません。' : (newVer === 'ko' ? '성경 구절을 찾을 수 없습니다.' : (newVer === 'kjv' || newVer === 'esv' || newVer === 'niv' ? 'No verses found.' : '目前的分類下沒有內容。')))) }];
+        targetVerses = [{ reference: "N/A", text: isEnglishBibleVersion(newVer) ? 'No paragraphs found.' : '目前的分類下沒有內容。' }];
       }
       setActiveVerse(targetVerses[0]);
       setSelectedVerseRefs([targetVerses[0].reference]);
@@ -7110,7 +5992,6 @@ export default function App() {
   };
 
   // One-time cleanup of the pre-v2 verse cache (see BIBLE_CACHE_KEY).
-  useEffect(() => { dropLegacyBibleCaches(); }, []);
 
   useEffect(() => {
     const parseUrlArgs = async () => {
@@ -7395,19 +6276,6 @@ export default function App() {
         if (hit?.text) return hit.text;
       }
     } catch { /* ignore */ }
-    // tier 2: bible cache
-    const cached = getCachedBibleVerse(ver, normKey);
-    if (cached) return cached;
-    // tier 3: fetch the official text in that version
-    try {
-      const parsed = parseScriptureKey(reference);
-      if (parsed?.bookId) {
-        const bookInfo = BIBLE_BOOKS.find(b => b.id === parsed.bookId);
-        const cv = parsed.verses ? `${parsed.chapter}:${parsed.verses}` : `${parsed.chapter}`;
-        const text = await fetchEditorVerseText({ bookInfo, sanitized: cv, version: ver });
-        if (text) { setCachedBibleVerse(ver, normKey, text); return text; }
-      }
-    } catch { /* ignore */ }
     return null;
   };
   // Freshest localized text for a reference in the player's CURRENT version, else fallback.
@@ -7416,21 +6284,8 @@ export default function App() {
     const t = localizedTextByRefRef.current[`${versionRef.current}|${normalizeVerseReferenceKey(reference)}`];
     return (t !== undefined && t !== '') ? t : fallback;
   };
-  // Localize just the reference LABEL (book name) into the player's version — purely
-  // a book-name remap, so it's synchronous and always available (no fetch needed).
-  const mpLocalRefFor = (reference) => {
-    if (!reference) return reference;
-    try {
-      const parsed = parseScriptureKey(reference);
-      if (parsed?.bookId) {
-        const bookInfo = BIBLE_BOOKS.find(b => b.id === parsed.bookId);
-        const name = getBookFullName(bookInfo, versionRef.current) || getBookAbbr(bookInfo, versionRef.current);
-        const cv = parsed.verses ? `${parsed.chapter}:${parsed.verses}` : `${parsed.chapter}`;
-        if (name) return `${name} ${cv}`.trim();
-      }
-    } catch { /* ignore */ }
-    return reference;
-  };
+  // 聽&說 labels are language-neutral, so the label needs no localization.
+  const mpLocalRefFor = (reference) => reference;
   // Both language sides of a bilingual item, sent alongside verseText so that
   // players in a single-verse room can localize without the campaign queue.
   const verseSidesOf = (v) => (isBilingualItem(v)
@@ -8001,7 +6856,7 @@ export default function App() {
       return localStorage.getItem('verseRain_voiceName') || '';
     }
   });
-  const langPrefixForVersion = (v) => (isEnglishBibleVersion(v) ? 'en' : v === 'ja' ? 'ja' : v === 'ko' ? 'ko' : v === 'fa' ? 'fa' : v === 'ar' ? 'ar' : v === 'he' ? 'he' : v === 'es' ? 'es' : v === 'tr' ? 'tr' : v === 'de' ? 'de' : v === 'my' ? 'my' : v === 'vi' ? 'vi' : v === 'id' ? 'id' : v === 'ms' ? 'ms' : v === 'pt' ? 'pt' : v === 'fr' ? 'fr' : v === 'ru' ? 'ru' : v === 'hi' ? 'hi' : 'zh');
+  const langPrefixForVersion = (v) => (isEnglishBibleVersion(v) ? 'en' : 'zh');
   const filteredVoicesForVersion = dedupeVoices(availableVoices.filter(vc => (vc.lang || '').toLowerCase().startsWith(langPrefixForVersion(version))));
   // Deduped + disambiguated display options for the voice <select> (fixes the
   // duplicate "Chinese Hong Kong" entries on Android).
@@ -8903,37 +7758,11 @@ export default function App() {
             setInitAutoStart({ trigger: true, isAuto: false });
           }, 300);
         } else {
-          const normalizedKey = normalizeVerseReferenceKey(challengeRef);
-          if (normalizedKey && !challengeFetchAttemptedRef.current.has(challengeRef)) {
+          if (!challengeFetchAttemptedRef.current.has(challengeRef)) {
             challengeFetchAttemptedRef.current.add(challengeRef);
-            const isEnglish = /^[a-zA-Z]/.test(challengeRef);
-            const targetVersion = isEnglish ? (baseLang(version) === 'en' ? version : 'en') : 'cuv';
-            (async () => {
-              let text = null;
-              if (targetVersion === 'esv' || targetVersion === 'kjv' || targetVersion === 'niv') {
-                const engRef = getEnglishReferenceFromKey(normalizedKey);
-                if (engRef) text = await fetchBibleVerseFromAPI(engRef, targetVersion);
-              } else if (targetVersion === 'tr' || targetVersion === 'my') {
-                text = await fetchVerseFromGetBible(normalizedKey, targetVersion);
-              } else if (targetVersion === 'tw') {
-                text = await fetchVerseFromTaibible(normalizedKey);
-              } else {
-                text = await fetchVerseFromBolls(normalizedKey, targetVersion);
-              }
-              if (!text) {
-                setToast(t('找不到此內容，請確認段落', 'Paragraph not found, please check the reference'));
-                setTimeout(() => setToast(null), 3000);
-                window.history.replaceState({}, document.title, pathWithSharedLang());
-                return;
-              }
-              const dynamicVerse = { reference: challengeRef, text, book: parseInt(normalizedKey.split('|')[0], 10) || 0 };
-              setActiveVerse(dynamicVerse);
-              setSelectedVerseRefs([challengeRef]);
-              window.history.replaceState({}, document.title, pathWithSharedLang());
-              setTimeout(() => {
-                setInitAutoStart({ trigger: true, isAuto: false });
-              }, 300);
-            })();
+            setToast(t('找不到此內容，請確認段落', 'Paragraph not found, please check the reference'));
+            setTimeout(() => setToast(null), 3000);
+            window.history.replaceState({}, document.title, pathWithSharedLang());
           }
         }
       }
@@ -10682,7 +9511,6 @@ const zhcnDict = {
   const simplifiedChineseFontStack = `'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', ${mixedScriptFallbackFontStack}`;
   const traditionalChineseFontStack = `'PingFang TC', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', ${mixedScriptFallbackFontStack}`;
   const japaneseFontStack = `'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', YuGothic, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', ${mixedScriptFallbackFontStack}`;
-  const koreanFontStack = `'Apple SD Gothic Neo', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', ${mixedScriptFallbackFontStack}`;
   const myanmarFontStack = `'Noto Sans Myanmar', 'Myanmar MN', 'Padauk', -apple-system, BlinkMacSystemFont, 'Segoe UI', ${mixedScriptFallbackFontStack}`;
   const latinFontStack = `-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, ${mixedScriptFallbackFontStack}`;
   const isActiveLanguage = (code) => uiLang === code || version === code;
@@ -11139,7 +9967,7 @@ const zhcnDict = {
                             <button
                               type="button"
                               onClick={() => {
-                                const lang = isEnglishBibleVersion(version) ? 'en-US' : version === 'ja' ? 'ja-JP' : version === 'ko' ? 'ko-KR' : version === 'fa' ? 'fa-IR' : version === 'he' ? 'he-IL' : version === 'es' ? 'es-ES' : version === 'tr' ? 'tr-TR' : version === 'de' ? 'de-DE' : version === 'my' ? 'my-MM' : 'zh-TW';
+                                const lang = getSpeechLangForVersion(version);
                                 initAudio();
                                 speakText(t('這是試聽。', 'This is a preview.'), 0.9, lang);
                               }}
@@ -13746,7 +12574,7 @@ const zhcnDict = {
                                 <span style={{ fontSize: '0.85rem', color: '#166534', background: '#b2f5ea', padding: '3px 10px', borderRadius: '12px', fontWeight: 'bold' }}>{stageLabel(selectedGardenCell.stage)}</span>
                                 {selectedGardenCell.detectedLang && selectedGardenCell.detectedLang !== version && (
                                   <span style={{ fontSize: '0.75rem', color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
-                                    {selectedGardenCell.detectedLang === 'kjv' ? 'KJV 🇬🇧' : selectedGardenCell.detectedLang === 'ko' ? '한국어 🇰🇷' : selectedGardenCell.detectedLang === 'ja' ? '日本語 🇯🇵' : selectedGardenCell.detectedLang === 'fa' ? 'فارسی 🇮🇷' : selectedGardenCell.detectedLang === 'he' ? 'עברית 🇮🇱' : '中文 🇹🇼'}
+                                    {isEnglishBibleVersion(selectedGardenCell.detectedLang) ? 'English 🇬🇧' : baseLang(selectedGardenCell.detectedLang) === 'cuvs' ? '简体 🇨🇳' : '繁體 🇹🇼'}
                                   </span>
                                 )}
                               </div>
@@ -14175,42 +13003,22 @@ const zhcnDict = {
                   {(() => {
                     if (!searchQuery.trim()) return <div style={{ color: '#64748b' }}>{t("請輸入關鍵字開始搜尋。", "Please enter a keyword to search.")}</div>;
                     const query = searchQuery.trim().toLowerCase();
-                    // When the query looks like a scripture reference ("詩篇 150", "詩 150",
-                    // "Psalms 150"), also match by book+chapter so ranges and abbreviations
-                    // resolve. Null for plain keyword searches, which skip this extra work.
-                    const scriptureQ = parseScriptureKey(searchQuery.trim());
-
-                    // Search in sets — title, description, author name, or (for a
-                    // reference query) a chapter range in the title that contains the chapter.
+                    // Search in sets — title, description, or author name.
                     const matchingSets = activeVerseSets.filter(s =>
                       s && s.title && (
                         s.title.toLowerCase().includes(query) ||
                         (s.description && s.description.replace(/<[^>]+>/g, '').toLowerCase().includes(query)) ||
-                        (s.authorName && s.authorName.toLowerCase().includes(query)) ||
-                        (scriptureQ && (() => {
-                          const r = parseSetChapterRange(s.title);
-                          return !!r && r.bookId === scriptureQ.bookId &&
-                            scriptureQ.chapter >= r.start && scriptureQ.chapter <= r.end;
-                        })())
+                        (s.authorName && s.authorName.toLowerCase().includes(query))
                       )
                     );
-                    // Search in individual verses — reference/title/text substring, or (for a
-                    // reference query) a matching book+chapter regardless of abbreviation form.
+                    // Search in individual paragraphs — label/title/text substring.
                     const matchingVerses = activeVerseSets.flatMap(s =>
                       (s && s.verses) ? s.verses.map(v => ({ ...v, setId: s.id, setName: s.title })) : []
                     ).filter(v =>
                       v && (
                         (v.reference && v.reference.toLowerCase().includes(query)) ||
                         (v.title && v.title.toLowerCase().includes(query)) ||
-                        (v.text && v.text.toLowerCase().includes(query)) ||
-                        (scriptureQ && v.reference && (() => {
-                          const vk = parseScriptureKey(v.reference);
-                          if (!vk || vk.bookId !== scriptureQ.bookId || vk.chapter !== scriptureQ.chapter) return false;
-                          if (!scriptureQ.verses) return true;
-                          if (!vk.verses) return false;
-                          return vk.verses === scriptureQ.verses ||
-                            vk.verses.split(/[,\-\s]+/).includes(scriptureQ.verses);
-                        })())
+                        (v.text && v.text.toLowerCase().includes(query))
                       )
                     );
 
@@ -16184,7 +14992,7 @@ const zhcnDict = {
                   <button
                     onClick={async () => {
                       updateGarden('activity_only', 'listen');
-                      const vLang = isEnglishBibleVersion(version) ? 'en-US' : (version === 'ko' ? 'ko-KR' : (version === 'ja' ? 'ja-JP' : (version === 'he' ? 'he-IL' : (version === 'fa' ? 'fa-IR' : 'zh-TW'))));
+                      const vLang = getSpeechLangForVersion(version);
                       const opts = await gatherVerseVoiceOptions(verseViewModal.setId, verseViewModal.reference);
                       // >1 recording → let the listener choose whose voice to hear.
                       if (opts.length > 1) {
@@ -16217,7 +15025,7 @@ const zhcnDict = {
                         if (withOwner.length === 1) {
                           openVoiceComments(verseViewModal.setId, verseViewModal.reference, withOwner[0]);
                         } else {
-                          const vLang = isEnglishBibleVersion(version) ? 'en-US' : (version === 'ko' ? 'ko-KR' : (version === 'ja' ? 'ja-JP' : (version === 'he' ? 'he-IL' : (version === 'fa' ? 'fa-IR' : 'zh-TW'))));
+                          const vLang = getSpeechLangForVersion(version);
                           setVerseVoicePicker({ setId: verseViewModal.setId, reference: verseViewModal.reference, text: verseViewModal.text, vLang, options: opts });
                         }
                       }}

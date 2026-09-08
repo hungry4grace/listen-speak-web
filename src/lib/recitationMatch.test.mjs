@@ -215,14 +215,12 @@ test('empty heard returns zero without crashing', () => {
 
 // ── speechLang (pins the old BlindModeGame.jsx:77 bug) ───────────────────
 
-test('getSpeechLangForVersion maps every version correctly', () => {
-  assert.strictEqual(getSpeechLangForVersion('esv'), 'en-US'); // was zh-TW!
-  assert.strictEqual(getSpeechLangForVersion('niv'), 'en-US'); // was zh-TW!
-  assert.strictEqual(getSpeechLangForVersion('kjv'), 'en-US');
-  assert.strictEqual(getSpeechLangForVersion('cuvs'), 'zh-CN'); // was zh-TW
-  assert.strictEqual(getSpeechLangForVersion('ko'), 'ko-KR');
-  assert.strictEqual(getSpeechLangForVersion('ja'), 'ja-JP');
-  assert.strictEqual(getSpeechLangForVersion('he'), 'he-IL');
+test('getSpeechLangForVersion maps every 聽&說 language to a speech tag', () => {
+  assert.strictEqual(getSpeechLangForVersion('en'), 'en-US');
+  assert.strictEqual(getSpeechLangForVersion('esv'), 'en-US'); // legacy English ids still count as English
+  assert.strictEqual(getSpeechLangForVersion('cuvs'), 'zh-CN');
+  assert.strictEqual(getSpeechLangForVersion('cuvs-pinyin'), 'zh-CN');
   assert.strictEqual(getSpeechLangForVersion('cuv'), 'zh-TW');
+  assert.strictEqual(getSpeechLangForVersion('cuv-bpmf'), 'zh-TW');
   assert.strictEqual(getSpeechLangForVersion('unknown-version'), 'zh-TW');
 });
