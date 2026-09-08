@@ -15,10 +15,9 @@ import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor } from './lib/lang.js';
 import './index.css';
 import { BIBLE_BOOKS, getBookAbbr, getBookFullName } from './bibleDictionary';
 import I18N_FILLINS from './i18nFillins';
-import { PREMIUM_EMAILS } from './premiumEmails';
 import ChallengeSetupModal, { loadChallengeSetup } from './ChallengeSetupModal';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, APPLE_REDIRECT_URI, LINE_CHANNEL_ID, startLineLogin } from './oauthConfig';
+import { GOOGLE_CLIENT_ID, APPLE_CLIENT_ID, APPLE_REDIRECT_URI } from './oauthConfig';
 import { VAPID_PUBLIC_KEY, urlBase64ToUint8Array, isWebPushSupported, isIOSStandalone, isIOSWithoutPWA, hasNativeDailyPush, callNativeDailyPush } from './pushConfig';
 import { setVoiceApi, uploadVerseVoice, uploadSetAsset, compressBackgroundImage, getSetAssetDataUrl, userVoiceApi, uploadUserVerseVoice, voiceOwnerId, voiceCommentApi, uploadVoiceComment } from './setVoiceApi';
 import VerseVoiceRecorder from './VerseVoiceRecorder';
@@ -512,14 +511,7 @@ function OAuthButtons({ onGoogleCredential, onAppleCredential, disabled, t }) {
   // when the web Services ID is configured.
   const showAppleButton = inIosApp || !!APPLE_CLIENT_ID;
 
-  // LINE uses a full-page redirect (no popup SDK), which works the same in
-  // the plain web, the Android TWA, and the iOS WKWebView — no bridge needed.
-  const handleLineClick = () => {
-    if (disabled) return;
-    startLineLogin();
-  };
-
-  if (!GOOGLE_CLIENT_ID && !showAppleButton && !LINE_CHANNEL_ID) {
+  if (!GOOGLE_CLIENT_ID && !showAppleButton) {
     return (
       <div style={{ fontSize: '0.78rem', color: '#94a3b8', textAlign: 'center', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '6px', padding: '0.7rem' }}>
         {t(
@@ -569,19 +561,6 @@ function OAuthButtons({ onGoogleCredential, onAppleCredential, disabled, t }) {
             <path d="M11.624 10.628c-.02-2.027 1.66-3.001 1.736-3.05-.946-1.382-2.418-1.571-2.943-1.593-1.252-.127-2.44.738-3.075.738-.635 0-1.612-.72-2.65-.7-1.366.02-2.622.793-3.327 2.012-1.42 2.461-.363 6.105 1.02 8.103.674 1.0 1.476 2.119 2.527 2.079 1.012-.04 1.395-.654 2.62-.654s1.567.654 2.638.634c1.088-.02 1.778-1.018 2.444-2.018.77-1.158 1.087-2.279 1.107-2.339-.024-.012-2.126-.815-2.147-3.232zM9.667 4.624c.553-.668.928-1.6.824-2.524-.798.032-1.764.531-2.336 1.198-.513.591-.962 1.54-.84 2.448.892.07 1.798-.453 2.352-1.122z" />
           </svg>
           {t('使用 Apple 繼續', 'Continue with Apple')}
-        </button>
-      )}
-      {LINE_CHANNEL_ID && (
-        <button
-          type="button"
-          onClick={handleLineClick}
-          disabled={disabled}
-          style={{ ...baseBtnStyle, background: '#06C755', color: '#fff', border: '1px solid #06C755' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63h2.386c.346 0 .627.285.627.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.63-.63.346 0 .628.285.628.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.282.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314" />
-          </svg>
-          {t('使用 LINE 繼續', 'Continue with LINE')}
         </button>
       )}
     </div>
@@ -652,7 +631,7 @@ function buildPublicShareUrl(path = '/', params = {}) {
 // push one history entry per step; popstate applies the hash back to state.
 // Only the query string carries share links (?listenSet= …) — those are
 // consumed and scrubbed as before, and every scrub must keep the hash.
-const ROUTE_TABS = ['lobby', 'versesets', 'custom_verses', 'multiplayer', 'daily_verse', 'advanced', 'garden', 'search', 'map', 'manual', 'about', 'accessible', 'bilingual_rain', 'leaderboard'];
+const ROUTE_TABS = ['lobby', 'versesets', 'custom_verses', 'multiplayer', 'daily_verse', 'advanced', 'garden', 'search', 'map', 'manual', 'about', 'bilingual_rain', 'leaderboard'];
 const ROUTE_FLAGS = ['listen', 'edit', 'play', 'room'];
 function parseRoute(hash) {
   const seg = String(hash || '').replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -3292,13 +3271,13 @@ function VerseSetContinuousRainPlayer({
     RAIN_FONT_LEVELS.includes(initialFontSizeLevel) ? initialFontSizeLevel : DEFAULT_PLAY_FONT_CHOICE
   );
   const [showTopicPicker, setShowTopicPicker] = useState(false);
-  // When entered from the lobby's 話語甘霖 card we open the picker AND hold
+  // When entered from the lobby's 好文欣賞 card we open the picker AND hold
   // playback: the listener first chooses 每日經文 / 我的最愛 / 主題經文, and only
   // that choice starts the reading (initialized from the prop so the very first
   // play effect on mount already sees it — no race with effect ordering).
   const deferInitialPlayRef = useRef(autoOpenPicker || startPaused);
   const pickerOpenedOnceRef = useRef(false);
-  // Auto-open the picker when the player is entered from the lobby's 話語甘霖
+  // Auto-open the picker when the player is entered from the lobby's 好文欣賞
   // card, so the listener lands straight on the 每日經文 / 我的最愛 / 主題經文
   // chooser. The parent clears its flag via onAutoPickerOpened so it fires once.
   useEffect(() => {
@@ -3548,7 +3527,7 @@ function VerseSetContinuousRainPlayer({
 
   useEffect(() => {
     if (!currentVerse) return undefined;
-    // Held after a lobby 話語甘霖 entry until the listener picks from the auto-
+    // Held after a lobby 好文欣賞 entry until the listener picks from the auto-
     // opened chooser. handlePickDailyVerse lifts this and bumps playKey to start.
     if (deferInitialPlayRef.current) return undefined;
     let cancelled = false;
@@ -4030,7 +4009,7 @@ function VerseSetContinuousRainPlayer({
                           </div>
                         ) : (
                           <div style={{ color: '#94a3b8', fontSize: '0.82rem', padding: '0.45rem 0.35rem', textAlign: 'center', border: '1px dashed rgba(148,163,184,0.35)', borderRadius: '8px' }}>
-                            {userEmail ? t('到經文題庫按星號加入', 'Star sets in Scripture Sets') : t('登入後可加入我的最愛', 'Log in to save favorites')}
+                            {userEmail ? t('到聽與說按星號加入', 'Star sets in Scripture Sets') : t('登入後可加入我的最愛', 'Log in to save favorites')}
                           </div>
                         )}
                       </section>
@@ -5169,132 +5148,6 @@ function formatVerseReferenceForSpeech(ref, version) {
   }
 }
 
-function AccessibleBlindHome({
-  verseSets,
-  currentSet,
-  randomPickCount,
-  setRandomPickCount,
-  onSelectSet,
-  onStart,
-  onReadGuide,
-  t
-}) {
-  const [localSetId, setLocalSetId] = React.useState(currentSet?.id || verseSets?.[0]?.id || '');
-  const selectedSet = React.useMemo(
-    () => verseSets.find(set => set.id === localSetId) || currentSet || verseSets[0],
-    [verseSets, localSetId, currentSet]
-  );
-  const verseCount = selectedSet?.verses?.length || 0;
-
-  React.useEffect(() => {
-    if (currentSet?.id) setLocalSetId(currentSet.id);
-  }, [currentSet?.id]);
-
-  const startCount = Math.min(verseCount || 1, Math.max(1, parseInt(randomPickCount) || 1));
-
-  return (
-    <section
-      role="region"
-      aria-labelledby="accessible-blind-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') onStart(selectedSet, startCount);
-        if (e.key.toLowerCase() === 'h') onReadGuide(selectedSet, startCount);
-      }}
-      tabIndex={0}
-      style={{
-        minHeight: 'calc(100dvh - 120px)',
-        background: '#050505',
-        color: '#f8fafc',
-        margin: '-0.5rem',
-        padding: 'clamp(1rem, 4vw, 3rem)',
-        borderRadius: '12px',
-        outline: '4px solid #facc15',
-        outlineOffset: '-4px'
-      }}
-    >
-      <div aria-live="polite" style={{ position: 'absolute', left: '-9999px' }}>
-        {t('你在視障友善版。按 Enter 開始，按 H 聽操作說明。', 'Accessible mode. Press Enter to start, H for instructions.')}
-      </div>
-
-      <div style={{ maxWidth: '980px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <div style={{ borderBottom: '3px solid #facc15', paddingBottom: '1rem' }}>
-          <p style={{ margin: '0 0 0.5rem', color: '#facc15', fontWeight: 'bold', fontSize: '1rem' }}>
-            {t('完全視障友善版', 'Fully Accessible Mode')}
-          </p>
-          <h1 id="accessible-blind-title" style={{ margin: 0, fontSize: 'clamp(2.2rem, 7vw, 4.5rem)', lineHeight: 1.05, letterSpacing: 0 }}>
-            {t('聽見、背誦、通關', 'Listen, Recite, Complete')}
-          </h1>
-        </div>
-
-        <p style={{ margin: 0, color: '#e2e8f0', fontSize: 'clamp(1.15rem, 3vw, 1.6rem)', lineHeight: 1.7, maxWidth: '820px' }}>
-          {t('這一版不需要看方塊。系統會讀出經文出處，停頓，然後用語音引導你背誦。請允許麥克風，照著提示開口唸出經文。', 'This version does not require seeing blocks. The app reads the reference, pauses, then guides you by voice. Allow microphone access and recite aloud.')}
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontWeight: 'bold', fontSize: '1.1rem' }}>
-            {t('選擇經文組', 'Choose Verse Set')}
-            <select
-              value={localSetId}
-              onChange={(e) => {
-                setLocalSetId(e.target.value);
-                onSelectSet(e.target.value);
-              }}
-              aria-label={t('選擇經文組', 'Choose verse set')}
-              style={{ fontSize: '1.2rem', padding: '1rem', borderRadius: '8px', border: '3px solid #facc15', background: '#111827', color: '#fff', fontWeight: 'bold' }}
-            >
-              {verseSets.map(set => (
-                <option key={set.id} value={set.id}>{set.title} ({set.verses?.length || 0})</option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontWeight: 'bold', fontSize: '1.1rem' }}>
-            {t('本次經文數量', 'Number of Verses')}
-            <input
-              type="number"
-              min="1"
-              max={Math.max(1, verseCount)}
-              value={startCount}
-              onChange={(e) => setRandomPickCount(Math.min(Math.max(1, parseInt(e.target.value) || 1), Math.max(1, verseCount)))}
-              aria-label={t('本次經文數量', 'Number of verses')}
-              style={{ fontSize: '1.4rem', padding: '1rem', borderRadius: '8px', border: '3px solid #facc15', background: '#111827', color: '#fff', fontWeight: 'bold' }}
-            />
-          </label>
-        </div>
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-          <button
-            onClick={() => onStart(selectedSet, startCount)}
-            style={{ flex: '1 1 280px', background: '#facc15', color: '#050505', border: 'none', borderRadius: '10px', padding: '1.4rem 1.6rem', fontSize: '1.35rem', fontWeight: 900, cursor: 'pointer' }}
-            aria-label={t('開始視障版，{title}，{n}節經文', 'Start accessible mode, {title}, {n} verses').replace('{title}', String(selectedSet?.title || '')).replace('{n}', String(startCount))}
-          >
-            {t('開始視障版', 'Start Accessible Mode')}
-          </button>
-          <button
-            onClick={() => onReadGuide(selectedSet, startCount)}
-            style={{ flex: '1 1 220px', background: '#0f172a', color: '#fff', border: '3px solid #93c5fd', borderRadius: '10px', padding: '1.4rem 1.6rem', fontSize: '1.2rem', fontWeight: 800, cursor: 'pointer' }}
-          >
-            {t('朗讀操作說明', 'Read Instructions')}
-          </button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.8rem' }}>
-          {[
-            t('Enter：開始挑戰', 'Enter: Start'),
-            t('H：朗讀說明', 'H: Read help'),
-            t('Esc：遊戲中離開', 'Esc: Exit in game'),
-            t('請先允許麥克風', 'Allow microphone first')
-          ].map((item) => (
-            <div key={item} style={{ border: '2px solid #334155', background: '#0f172a', borderRadius: '8px', padding: '1rem', fontSize: '1.05rem', fontWeight: 'bold' }}>
-              {item}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 const parseVerseRef = (v) => {
   if (v.book && v.verseInput) {
     const fixedVerseInput = String(v.verseInput).replace(/^\s*alm\s+/i, '').trim();
@@ -5571,7 +5424,7 @@ export default function App() {
   const [isPremium, setIsPremium] = useState(() => {
     const storedPremium = localStorage.getItem('verserain_is_premium') === 'true';
     const storedEmail = localStorage.getItem('verserain_player_email') || "";
-    return storedPremium || PREMIUM_EMAILS.includes(storedEmail.toLowerCase());
+    return storedPremium;
   });
 
   // ─── My Inviter (推薦人) state ──────────────────────────────────────────
@@ -6884,135 +6737,6 @@ export default function App() {
     return Array.from(byId.values());
   }, [customVerseSets, publishedVerseSets, loadedLangs]);
 
-  // ── 經文組翻譯 ────────────────────────────────────────────────────
-  // Localize a whole set into another language: machine-translate the TITLE,
-  // remap each verse's 出處 to the target language's book name, and fetch that
-  // language's OFFICIAL verse text. The 簡介 (description) is copied untranslated.
-  const stripSetLangSuffix = (id) => String(id || '')
-    .replace(/-(cuv|cuvs|kjv|esv|niv|ja|ko|fa|he|es|tr|de|my|vi|id|ms|tw|pt|fr|ru|hi)$/i, '');
-  const translateTitleText = async (text, targetVersion, sourceVersion) => {
-    const src = String(text || '').trim();
-    if (!src) return '';
-    try {
-      const res = await fetch('/api/translate-passage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: src, targetVersion, sourceVersion }),
-      });
-      if (!res.ok) return '';
-      const data = await res.json().catch(() => ({}));
-      return String(data?.text || '').trim();
-    } catch { return ''; }
-  };
-  const runSetTranslation = async () => {
-    const tm = translateModal;
-    if (!tm || !tm.set || !tm.target) return;
-    const set = tm.set;
-    const target = tm.target;
-    // Anyone may translate + preview; login is only required to publish (加入題庫).
-    const targetId = target === 'cuv' ? stripSetLangSuffix(set.id) : `${stripSetLangSuffix(set.id)}-${target}`;
-    // Make sure the target language's official sets are loaded, then bail out if
-    // this translation already exists (official or previously published). Check the
-    // FRESHLY-awaited langData.sets directly — getSetsForVersion closes over the
-    // pre-update `loadedLangs`, so it wouldn't see a just-loaded language.
-    let langData = loadedLangs[target];
-    if (!langData) {
-      try { langData = await loadLanguageSets(target); setLoadedLangs(prev => ({ ...prev, [target]: langData })); } catch { /* best-effort */ }
-    }
-    const existing = [
-      ...((langData?.sets) || []),
-      ...customVerseSets.filter(s => (s.language || 'cuv') === target),
-      ...publishedVerseSets.filter(s => (s.language || 'cuv') === target),
-    ].find(s => s?.id === targetId);
-    if (existing) { setTranslateModal(m => (m ? { ...m, phase: 'exists', targetId, existingTitle: existing.title } : m)); return; }
-
-    const srcVerses = (set.verses || []).filter(Boolean);
-    setTranslateModal(m => (m ? { ...m, phase: 'working', targetId, progress: { done: 0, total: srcVerses.length } } : m));
-    const translatedTitle = (await translateTitleText(set.title || '', target, version)) || set.title || '';
-    const outVerses = [];
-    for (let i = 0; i < srcVerses.length; i++) {
-      const v = srcVerses[i];
-      let reference = v.reference || '';
-      let text = '';
-      let _bookId = null;
-      let _cv = '';
-      const parsed = parseScriptureKey(v.reference);
-      if (parsed && parsed.bookId) {
-        const bookInfo = BIBLE_BOOKS.find(b => b.id === parsed.bookId);
-        if (bookInfo) {
-          _bookId = parsed.bookId;
-          _cv = parsed.verses ? `${parsed.chapter}:${parsed.verses}` : `${parsed.chapter}`;
-          const bookName = getBookFullName(bookInfo, target) || getBookAbbr(bookInfo, target) || '';
-          reference = `${bookName} ${_cv}`.trim();
-          try { text = await fetchEditorVerseText({ bookInfo, sanitized: _cv, version: target }); } catch { text = ''; }
-        }
-      }
-      outVerses.push({ id: v.id || `${targetId}-v${i + 1}`, reference, title: translatedTitle, text: text || '', failed: !text, _bookId, _cv });
-      setTranslateModal(m => (m && m.phase === 'working') ? { ...m, progress: { done: i + 1, total: srcVerses.length } } : m);
-    }
-    setTranslateModal(m => (m ? { ...m, phase: 'preview', title: translatedTitle, verses: outVerses, targetId } : m));
-  };
-  const retryTranslateVerse = async (index) => {
-    const cur = translateModal;
-    if (!cur || cur.phase !== 'preview') return;
-    const v = cur.verses?.[index];
-    if (!v?._bookId) return;
-    const bookInfo = BIBLE_BOOKS.find(b => b.id === v._bookId);
-    if (!bookInfo) return;
-    setTranslateModal(m => { if (!m) return m; const vs = [...m.verses]; vs[index] = { ...vs[index], retrying: true }; return { ...m, verses: vs }; });
-    let text = '';
-    try { text = await fetchEditorVerseText({ bookInfo, sanitized: v._cv, version: cur.target }); } catch { text = ''; }
-    setTranslateModal(m => { if (!m) return m; const vs = [...m.verses]; vs[index] = { ...vs[index], text: text || '', failed: !text, retrying: false }; return { ...m, verses: vs }; });
-  };
-  const publishTranslatedSet = () => {
-    const tm = translateModal;
-    if (!tm || tm.phase !== 'preview') return;
-    if (!userEmail) { setShowLoginModal('login'); return; }
-    const { set, target, targetId } = tm;
-    const title = (tm.title || '').trim() || set.title || '';
-    const now = new Date().toISOString();
-    const setObj = {
-      id: targetId,
-      language: target,
-      title,
-      // 簡介不複製 — 原文是來源語言，換了語言就不適用。留空讓建立者自己寫。
-      description: '',
-      verses: (tm.verses || []).map(v => ({ id: v.id, reference: v.reference, title, text: v.text || '' })),
-      isPublished: true,
-      authorName: playerName || 'Anonymous',
-      createdAt: set.createdAt || now,
-      lastEditedAt: now,
-      lastEditorName: playerName || 'Anonymous',
-      translatedFrom: set.id,
-    };
-    setCustomVerseSets(prev => {
-      const next = prev.some(s => s.id === setObj.id) ? prev.map(s => s.id === setObj.id ? setObj : s) : [setObj, ...prev];
-      try { localStorage.setItem('verseRain_custom_sets', JSON.stringify(next)); } catch { /* quota */ }
-      return next;
-    });
-    fetch('https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...setObj, adminEmail: userEmail, adminName: playerName }),
-    }).then(async (res) => {
-      if (res.ok) return;
-      const d = await res.json().catch(() => ({}));
-      setToast(t('發布失敗:{error}。其他人將看不到這個題庫。', "Publish failed: {error}. Others won't see this set.").replace('{error}', String(d.error || res.status)));
-      setTimeout(() => setToast(null), 6000);
-      setPublishedVerseSets(prev => prev.filter(p => p.id !== setObj.id));
-    }).catch(e => console.error('Publish translated set failed', e));
-    setPublishedVerseSets(prev => prev.some(p => p.id === setObj.id) ? prev.map(p => p.id === setObj.id ? setObj : p) : [setObj, ...prev]);
-    const langLabel = (BIBLE_LANGUAGE_OPTIONS.find(o => o.value === target) || {}).label || target;
-    setToast(t('已加入「{lang}」題庫，可在此編輯或補上簡介', 'Added to the {lang} library — edit it or add a description here').replace('{lang}', langLabel));
-    setTimeout(() => setToast(null), 5000);
-    // Per the requested flow: switch the app to the new language and drop the
-    // user straight into that set's editor so they can refine it / write the 簡介.
-    setTranslateModal(null);
-    handleVersionChange(target);
-    setSelectedSetId(setObj.id);
-    setEditingCustomSet({ ...setObj, isPublished: true, verses: (setObj.verses || []).map(parseVerseRef) });
-    setMainTab('custom_verses');
-  };
 
   // Flat list of all verses loaded for the secondary language (built-in + custom + published)
   const allSecondaryVerses = React.useMemo(() => {
@@ -7082,7 +6806,7 @@ export default function App() {
   }, [preferredRainSet, rainVerseIndex]);
 
   const [dailyVerseDate, setDailyVerseDate] = useState(() => formatLocalDate(new Date()));
-  // Set when the lobby 話語甘霖 card is tapped, so the daily player auto-opens
+  // Set when the lobby 好文欣賞 card is tapped, so the daily player auto-opens
   // its 每日經文 / 我的最愛 / 主題經文 picker on entry. Cleared once consumed.
   const [openDailyPickerOnEnter, setOpenDailyPickerOnEnter] = useState(false);
   // vo= from a listenDaily share link — the sender's personal-voice owner id,
@@ -8013,7 +7737,7 @@ export default function App() {
         localStorage.removeItem('verseRain_gardenData');
         setGardenData({});
       }
-      const isPrem = user.isPremium || PREMIUM_EMAILS.includes((user.email || '').toLowerCase());
+      const isPrem = !!user.isPremium;
       setPlayerName(user.name || displayName);
       setUserEmail(user.email);
       setIsPremium(isPrem);
@@ -8046,29 +7770,6 @@ export default function App() {
       setAuthLoading(false);
     }
   }, []);
-
-  // LINE OAuth redirect return — startLineLogin() sent the user to LINE, and
-  // LINE redirected back to <origin>/?code=...&state=line_.... Exchange the
-  // code via the PartyKit backend, then scrub the OAuth params from the URL so
-  // a refresh doesn't replay a now-consumed code.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state') || '';
-    if (!code || !state.startsWith('line_')) return;
-    const savedState = sessionStorage.getItem('verserain_line_state');
-    const redirectUri = sessionStorage.getItem('verserain_line_redirect') || (window.location.origin + '/');
-    sessionStorage.removeItem('verserain_line_state');
-    sessionStorage.removeItem('verserain_line_redirect');
-    ['code', 'state', 'error', 'error_description'].forEach(k => params.delete(k));
-    const rest = params.toString();
-    window.history.replaceState({}, '', window.location.pathname + (rest ? '?' + rest : '') + (window.location.hash || ''));
-    if (savedState !== state) return; // CSRF state mismatch — ignore the response
-    // Re-open the login modal so the spinner shows while we exchange the code
-    // and any error has somewhere to surface; success closes it again.
-    setShowLoginModal('login');
-    handleOAuthSignIn('line', { code, redirectUri });
-  }, [handleOAuthSignIn]);
 
   const [verseViewModal, setVerseViewModal] = useState(null);
   // Single-verse voice chooser — when a verse has MORE THAN ONE recording
@@ -8324,9 +8025,6 @@ export default function App() {
   }, []);
 
   const [qrShareModal, setQrShareModal] = useState(null); // { url, reference }
-  // 經文組翻譯 modal。phase: 'pick' | 'working' | 'preview' | 'exists' | 'done'.
-  // { set, target, targetId?, title?, verses?, progress?, existingId? }
-  const [translateModal, setTranslateModal] = useState(null);
   const [multiplayerRoomId, setMultiplayerRoomId] = useState(null);
   const [multiplayerRoomMode, setMultiplayerRoomMode] = useState(null);
   const [multiplayerRoomRole, setMultiplayerRoomRole] = useState('player');
@@ -10594,7 +10292,7 @@ const zhcnDict = {
   "聆聽畫面的 <strong>「播放方式」</strong> 視窗和幾顆新按鈕，讓連續聆聽更貼近你的習慣：": "聆听画面的 <strong>「播放方式」</strong> 窗口和几颗新按钮，让连续聆听更贴近你的习惯：",
   "<strong>⏱️ 播放時間：</strong>可設定播放幾分鐘後自動停止，或無限循環播放——睡前、靈修時段都好用。": "<strong>⏱️ 播放时间：</strong>可设定播放几分钟后自动停止，或无限循环播放——睡前、灵修时段都好用。",
   "<strong>🔠 字體大小：</strong>同一個視窗裡可以調整聆聽畫面的字級，長輩或投影使用時把字放大更清楚。": "<strong>🔠 字体大小：</strong>同一个窗口里可以调整聆听画面的字级，长辈或投影使用时把字放大更清楚。",
-  "<strong>⭐ 我的最愛：</strong>聆聽時點播放器上的星星，或在「我的專屬題庫」的卡片上點星星，就能把經文組加入我的最愛。清單可用「我的最愛」排序，而且會跟著帳號同步到每一台裝置；從大廳「話語甘霖」進入後，也能直接挑「我的最愛」來聽。": "<strong>⭐ 我的最爱：</strong>聆听时点播放器上的星星，或在「我的专属题库」的卡片上点星星，就能把经文组加入我的最爱。清单可用「我的最爱」排序，而且会跟着账号同步到每一台设备；从大厅「话语甘霖」进入后，也能直接挑「我的最爱」来听。",
+  "<strong>⭐ 我的最愛：</strong>聆聽時點播放器上的星星，或在「我的專屬題庫」的卡片上點星星，就能把經文組加入我的最愛。清單可用「我的最愛」排序，而且會跟著帳號同步到每一台裝置；從大廳「好文欣賞」進入後，也能直接挑「我的最愛」來聽。": "<strong>⭐ 我的最爱：</strong>聆听时点播放器上的星星，或在「我的专属题库」的卡片上点星星，就能把经文组加入我的最爱。清单可用「我的最爱」排序，而且会跟着账号同步到每一台设备；从大厅「好文欣赏」进入后，也能直接挑「我的最爱」来听。",
   "<strong>▶️ 一鍵播放：</strong>「我的專屬題庫」每張卡片都多了「播放」鍵，不必先進入經文組就能開始連續聆聽（可選隨機或按序）。": "<strong>▶️ 一键播放：</strong>「我的专属题库」每张卡片都多了「播放」键，不必先进入经文组就能开始连续聆听（可选随机或按序）。",
   "<strong>🔄 雙語對調：</strong>讀經頁的「朗讀第二語言」按鈕會暫時把主／次語言互換，改用第二語言落字並朗讀，原語言退到下方小字；離開後自動還原，練習外語聽讀很方便。": "<strong>🔄 双语对调：</strong>读经页的「朗读第二语言」按钮会暂时把主／次语言互换，改用第二语言落字并朗读，原语言退到下方小字；离开后自动还原，练习外语听读很方便。",
   "<strong>⚡ 邊聽邊挑戰：</strong>聆聽中按 ⚡ 立刻挑戰這一節；結束後按「返回朗讀」會回到同一節並暫停等你，按播放或 ‹ › 就能接著聽下一節。": "<strong>⚡ 边听边挑战：</strong>聆听中按 ⚡ 立刻挑战这一节；结束后按「返回朗读」会回到同一节并暂停等你，按播放或 ‹ › 就能接着听下一节。",
@@ -10608,16 +10306,16 @@ const zhcnDict = {
   "點擊標記可以查看該玩家的成績；地圖上若有進行中的多人遊戲房間，<strong>雙擊房間就能直接加入戰局</strong>！": "点击标记可以查看该玩家的成绩；地图上若有进行中的多人游戏房间，<strong>双击房间就能直接加入战局</strong>！",
   "右上角可在 <strong>「2D 地圖」</strong> 與 <strong>「3D 地球」</strong> 之間切換，轉動地球，看看全球背經的即時脈動。": "右上角可在 <strong>「2D 地图」</strong> 与 <strong>「3D 地球」</strong> 之间切换，转动地球，看看全球背经的实时脉动。",
   // 操作手冊：教學影片與步驟改寫
-  "1. 從大廳進入「經文題庫」": "1. 从大厅进入「经文题库」",
-  "在大廳點 <strong>「經文題庫」</strong> 卡片，就會看到系統與玩家建立的所有公開經文組，可依最新、標題或最受歡迎排序。": "在大厅点 <strong>「经文题库」</strong> 卡片，就会看到系统与玩家建立的所有公开经文组，可依最新、标题或最受欢迎排序。",
+  "1. 從大廳進入「聽與說」": "1. 从大厅进入「听与说」",
+  "在大廳點 <strong>「聽與說」</strong> 卡片，就會看到系統與玩家建立的所有公開經文組，可依最新、標題或最受歡迎排序。": "在大厅点 <strong>「听与说」</strong> 卡片，就会看到系统与玩家建立的所有公开经文组，可依最新、标题或最受欢迎排序。",
   "2. 選擇想要挑戰的經文組": "2. 选择想要挑战的经文组",
   "點選列表中的標題（例如：<strong>約翰福音 核心經文</strong>），進入經文組頁面，裡面列出每一節經文，右側有「播放」「排行榜」「挑戰」「分享」等按鈕。": "点选列表中的标题（例如：<strong>约翰福音 核心经文</strong>），进入经文组页面，里面列出每一节经文，右侧有「播放」「排行榜」「挑战」「分享」等按钮。",
   "3. 開始挑戰": "3. 开始挑战",
   "點該節右側的綠色 <strong>⚡ 挑戰</strong> 鍵，選擇遊戲模式（九宮格／經文雨／語音模式）與難度，按「開始挑戰」——三秒後經文雨就傾盆而下！依正確順序點擊落下的方塊，越快完成、時間加成越高。": "点该节右侧的绿色 <strong>⚡ 挑战</strong> 键，选择游戏模式（九宫格／经文雨／语音模式）与难度，按「开始挑战」——三秒后经文雨就倾盆而下！依正确顺序点击落下的方块，越快完成、时间加成越高。",
-  "教學影片：從大廳進入經文題庫 → 選經文組 → ⚡ 挑戰 → 選模式 → 依序點擊方塊，完成一次挑戰。": "教学视频：从大厅进入经文题库 → 选经文组 → ⚡ 挑战 → 选模式 → 依序点击方块，完成一次挑战。",
+  "教學影片：從大廳進入聽與說 → 選經文組 → ⚡ 挑戰 → 選模式 → 依序點擊方塊，完成一次挑戰。": "教学视频：从大厅进入听与说 → 选经文组 → ⚡ 挑战 → 选模式 → 依序点击方块，完成一次挑战。",
   "教學影片：左邊是主持人（繁體中文）在經文組頁按「邀人PK」開房；右邊是朋友把版本切成 English - ESV 後輸入代碼加入。比賽開始後，同一節經文各自看到自己的語言。": "教学视频：左边是主持人（繁体中文）在经文组页按「邀人PK」开房；右边是朋友把版本切成 English - ESV 后输入代码加入。比赛开始后，同一节经文各自看到自己的语言。",
   "教學影片：在經文組頁按「播放」→ 播放方式視窗設定播放時間、字體大小、聲音來源 → 選「按序」開始連續聆聽。": "教学视频：在经文组页按「播放」→ 播放方式窗口设定播放时间、字体大小、声音来源 → 选「按序」开始连续聆听。",
-  "教學影片：大廳「話語甘霖」→ 選「每日經文」或主題經文 → 按「朗讀」做雙語對調（改用第二語言朗讀）→ 按「切換聲音」選電腦語音、無聲音或親聲。": "教学视频：大厅「话语甘霖」→ 选「每日经文」或主题经文 → 按「朗读」做双语对调（改用第二语言朗读）→ 按「切换声音」选电脑语音、无声音或亲声。",
+  "教學影片：大廳「好文欣賞」→ 選「每日經文」或主題經文 → 按「朗讀」做雙語對調（改用第二語言朗讀）→ 按「切換聲音」選電腦語音、無聲音或親聲。": "教学视频：大厅「好文欣赏」→ 选「每日经文」或主题经文 → 按「朗读」做双语对调（改用第二语言朗读）→ 按「切换声音」选电脑语音、无声音或亲声。",
   "教學影片：在經文組頁按「翻譯」→ 選 Bahasa Melayu → 系統翻譯標題並抓取馬來文譯本 → 預覽 16 節全部成功 → 「加入並編輯」。": "教学视频：在经文组页按「翻译」→ 选 Bahasa Melayu → 系统翻译标题并抓取马来文译本 → 预览 16 节全部成功 → 「加入并编辑」。",
   "教學影片：點「地圖」看全球玩家分佈 → 按「3D 地球」→ 拖曳轉動地球。": "教学视频：点「地图」看全球玩家分布 → 按「3D 地球」→ 拖拽转动地球。",
   "同一章的其他節可以用逗號接在後面：「約翰福音 1:1, 4」＝ 1:1 與 1:4；「創世記 1:26-28, 2:7」＝ 同書卷的 2:7。": "同一章的其他节可以用逗号接在后面：「约翰福音 1:1, 4」＝ 1:1 与 1:4；「创世记 1:26-28, 2:7」＝ 同书卷的 2:7。",
@@ -10625,12 +10323,12 @@ const zhcnDict = {
   "歡迎進入 <strong>VerseRain 經文雨</strong>！這是一個結合聆聽、挑戰與學習的互動背經平台。<br />在這裡您可以挑戰全球經文組、建立個人專屬的題庫，也能用自己的聲音把經文分享給朋友！": "欢迎进入 <strong>VerseRain 经文雨</strong>！这是一个结合聆听、挑战与学习的互动背经平台。<br />在这里您可以挑战全球经文组、建立个人专属的题库，也能用自己的声音把经文分享给朋友！",
   "二、如何自建專屬「經文組」？": "二、如何自建专属「经文组」？",
   "只要登入帳號，任何人都可以打造自己的主日學、小組或個人靈修專屬題庫，建好就能聆聽、挑戰、分享。": "只要登录账号，任何人都可以打造自己的主日学、小组或个人灵修专属题库，建好就能聆听、挑战、分享。",
-  "先<strong>登入</strong>，再從大廳點 <strong>「經文題庫」</strong>，進入上方的 <strong>「我的專屬題庫」</strong>。": "先<strong>登录</strong>，再从大厅点 <strong>「经文题库」</strong>，进入上方的 <strong>「我的专属题库」</strong>。",
+  "先<strong>登入</strong>，再從大廳點 <strong>「聽與說」</strong>，進入上方的 <strong>「我的專屬題庫」</strong>。": "先<strong>登录</strong>，再从大厅点 <strong>「听与说」</strong>，进入上方的 <strong>「我的专属题库」</strong>。",
   "點 <strong>「＋ 建立新題庫」</strong>，填上標題與簡介；也可以挑一張背景圖片、選背景音樂或上傳自己的音樂。": "点 <strong>「＋ 建立新题库」</strong>，填上标题与简介；也可以挑一张背景图片、选背景音乐或上传自己的音乐。",
   "在經文列表選好書卷、輸入 <strong>章:節</strong>（如 <code>3:16</code> 或 <code>6:9-13</code>），按 <strong>Enter 或 Tab</strong>，系統就會自動抓取完整經文。": "在经文列表选好书卷、输入 <strong>章:节</strong>（如 <code>3:16</code> 或 <code>6:9-13</code>），按 <strong>Enter 或 Tab</strong>，系统就会自动抓取完整经文。",
   "經文很多？用 <strong>「輸入出處批次匯入」</strong>，一次貼上多個出處（每行一個或用逗號分隔）。逗號後面的純節數會接在同一章：<code>約翰福音 1:1, 4</code> 就是 1:1 與 1:4。": "经文很多？用 <strong>「输入出处批次导入」</strong>，一次贴上多个出处（每行一个或用逗号分隔）。逗号后面的纯节数会接在同一章：<code>约翰福音 1:1, 4</code> 就是 1:1 与 1:4。",
   "每一節旁邊都有 🎙️ 麥克風，可以順手錄下自己的親聲朗讀。": "每一节旁边都有 🎙️ 麦克风，可以顺手录下自己的亲声朗读。",
-  "確認無誤後點 <strong>「儲存題庫」</strong>。這份經文組就會出現在「經文題庫」，大家都可以聆聽與挑戰。": "确认无误后点 <strong>「储存题库」</strong>。这份经文组就会出现在「经文题库」，大家都可以聆听与挑战。",
+  "確認無誤後點 <strong>「儲存題庫」</strong>。這份經文組就會出現在「聽與說」，大家都可以聆聽與挑戰。": "确认无误后点 <strong>「储存题库」</strong>。这份经文组就会出现在「听与说」，大家都可以聆听与挑战。",
   "<strong>提示：</strong>經文抓取串接了各語言的聖經資料庫（和合本、ESV、KJV…），能大幅省去打字與校稿的時間；建好的經文組還能用「翻譯」一鍵在地化到其他語言（見第七章）。": "<strong>提示：</strong>经文抓取串接了各语言的圣经数据库（和合本、ESV、KJV…），能大幅省去打字与校稿的时间；建好的经文组还能用「翻译」一键本地化到其他语言（见第七章）。",
 };
   Object.assign(zhcnDict, {
@@ -10770,7 +10468,7 @@ const zhcnDict = {
     "開始雙語經文雨": "开始双语经文雨",
     "目前使用「經文雨」官方經文組做測試。": "目前使用「经文雨」官方经文组做测试。",
     "正在載入語言資料...": "正在载入语言资料...",
-    "話語甘霖": "话语甘霖",
+    "好文欣賞": "好文欣赏",
     "每日經文": "每日经文",
     "已開啟每日經文推播": "已开启每日经文推播",
     "開啟每日經文推播": "开启每日经文推播",
@@ -10911,35 +10609,6 @@ const zhcnDict = {
     if (uiLang === 'en') return en || zh;
     if (uiLang === 'cuvs') return zhcnDict[zh] || zh;
     return zh; // 'zh' — Traditional source strings
-  };
-
-  const startAccessibleBlindGame = (set, count = 1) => {
-    if (!set?.verses?.length) return;
-    initAudio();
-    const n = Math.min(set.verses.length, Math.max(1, parseInt(count) || 1));
-    const queue = [...set.verses].sort(() => 0.5 - Math.random()).slice(0, n);
-    setSelectedSetId(set.id);
-    setIsBlindMode(true);
-    localStorage.setItem('verseRain_blindMode', 'true');
-    setPlayMode('voice_solo');
-    setDistractionLevel(0);
-    setCampaignQueue(queue.slice(1));
-    campaignQueueRef.current = queue.slice(1);
-    setCampaignResults([]);
-    setActiveCampaignSetId(set.id);
-    setActiveCampaignSetTotal(queue.length);
-    setActiveVerse(queue[0]);
-    setSelectedVerseRefs([queue[0].reference]);
-    speakText(t('視障版開始。請允許麥克風。聽到提示音後，開口背誦經文。', 'Accessible mode starting. Please allow microphone access. After the prompt sound, recite the verse aloud.'), 0.95, isEnglishBibleVersion(version) ? 'en-US' : 'zh-TW');
-    setTimeout(() => startGame(false, queue[0]), 700);
-  };
-
-  const readAccessibleGuide = (set, count = 1) => {
-    const message = t(
-      '這是視障友善版。現在選擇的是 {title}，本次 {n} 節經文。按開始後，系統會先讀經文出處，停頓兩秒，再等你開口背誦。若一段時間沒有答對，系統會朗讀提示。遊戲中按 Escape 可以離開。',
-      'This is the accessible mode. The selected set is {title}, {n} verses. After starting, the app reads the reference, pauses for two seconds, then waits for your recitation. If you need help, the app will read a prompt. Press Escape during the game to leave.'
-    ).replace('{title}', String(set?.title || currentSet?.title)).replace('{n}', String(count));
-    speakText(message, 0.95, isEnglishBibleVersion(version) ? 'en-US' : 'zh-TW');
   };
 
   const restartTeamSoloRun = () => {
@@ -11431,7 +11100,7 @@ const zhcnDict = {
                     {/* Daily VerseRain */}
                     <div className="primary-button" onClick={() => { setOpenDailyPickerOnEnter(true); setMainTab('daily_verse'); }} style={{ background: 'linear-gradient(135deg, #818cf8, #6366f1 55%, #4338ca)', borderRadius: '16px', padding: isNarrowEditor ? '0.3rem 0.6rem' : '2.5rem 2rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center', boxShadow: '0 10px 28px rgba(79, 70, 229, 0.35)' }}>
                       <CloudRain size={isNarrowEditor ? 46 : 72} style={{ marginBottom: isNarrowEditor ? '0.15rem' : '1rem' }} />
-                      <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t("話語甘霖", "Verse Rain")}</h2>
+                      <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t('好文欣賞', 'Good Reads')}</h2>
                       <p style={{ ...tileCaptionStyle(0.95) }}>{splitCaption(t("每日一句神的話，心意更新而變化。", "A verse a day to renew your mind."))}</p>
                     </div>
 
@@ -11445,7 +11114,7 @@ const zhcnDict = {
                     {/* Scripture Library */}
                     <div className="primary-button" onClick={() => setMainTab('versesets')} style={{ background: 'linear-gradient(135deg, #60a5fa, #3b82f6)', borderRadius: '16px', padding: isNarrowEditor ? '0.3rem 0.6rem' : '2.5rem 2rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center' }}>
                       <Library size={isNarrowEditor ? 46 : 72} style={{ marginBottom: isNarrowEditor ? '0.15rem' : '1rem' }} />
-                      <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t("經文題庫", "Scripture Sets")}</h2>
+                      <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t('聽與說', 'Listen & Speak')}</h2>
                       <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("經題萬卷勤溫故，句句生光照此程。", "Browse global verse sets and choose scriptures to practice."))}</p>
                     </div>
 
@@ -11459,18 +11128,6 @@ const zhcnDict = {
                 </div>
               )}
 
-              {mainTab === 'accessible' && (
-                <AccessibleBlindHome
-                  verseSets={safeActiveSets}
-                  currentSet={currentSet}
-                  randomPickCount={randomPickCount}
-                  setRandomPickCount={setRandomPickCount}
-                  onSelectSet={(setId) => setSelectedSetId(setId)}
-                  onStart={startAccessibleBlindGame}
-                  onReadGuide={readAccessibleGuide}
-                  t={t}
-                />
-              )}
 
               {mainTab === 'daily_verse' && (
                 !speechReady ? (
@@ -11814,11 +11471,6 @@ const zhcnDict = {
                         only needs a login (see canCreateCustomSets). The old
                         "Lv.{n} 權限解鎖" badge implied a gate that does not exist,
                         so a new member read its absence as "I'm not allowed yet". */}
-                    {isPremium && (
-                      <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '0.3rem 0.6rem', borderRadius: '4px', fontSize: '0.85rem', color: '#fbbf24', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <Star size={16} /> {t("Premium 認證", "Premium Active")}
-                      </div>
-                    )}
                   </div>
 
                   {!canCreateCustomSets ? (
@@ -12480,10 +12132,6 @@ const zhcnDict = {
                                       setPlayOrderChooser(set);
                                     }} title={t("連續播放這個經文組（隨機或按序）", "Continuously play this verse set (shuffled or in order)")} style={{ background: '#8b5cf6', border: '1px solid #7c3aed', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}><Headphones size={14} fill="white" /> {t("播放", "Play")}</button>
                                     <button type="button" onClick={() => setEditingCustomSet({ ...set, verses: set.verses?.map(parseVerseRef) || [] })} style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>{t("編輯", "Edit")}</button>
-                                    <button type="button" onClick={() => {
-                                      if (!set?.verses?.length) return;
-                                      setTranslateModal({ set, target: '', phase: 'pick' });
-                                    }} title={t("把整組經文翻譯到另一種語言的題庫", "Translate this whole set into another language's library")} style={{ background: '#e0f2fe', border: '1px solid #7dd3fc', padding: '0.4rem 0.8rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '4px' }}><Languages size={14} /> {t("翻譯", "Translate")}</button>
                                   </div>
                                   <h3 style={{ margin: '0 0 0.5rem 0', color: '#1e293b', paddingRight: '120px' }}>{set.title}</h3>
                                   {/* Clamp long rich-text intros to ~3 lines so the list stays scannable.
@@ -13567,19 +13215,6 @@ const zhcnDict = {
                                 <Edit size={16} color="white" /> {t("編輯", "Edit")}
                               </button>
                             )}
-
-                            <button
-                              onClick={() => {
-                                if (!currentSet?.verses?.length) return;
-                                setTranslateModal({ set: currentSet, target: '', phase: 'pick' });
-                              }}
-                              title={t("把整組經文翻譯到另一種語言的題庫", "Translate this whole set into another language's library")}
-                              style={{ backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '6px', padding: '0 0.8rem', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.1s', fontWeight: 'bold', gap: '5px' }}
-                              onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                              onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                            >
-                              <Languages size={16} /> {t("翻譯", "Translate")}
-                            </button>
                           </div>
                         </div>
                         {currentSet?.description && (
@@ -14926,23 +14561,23 @@ const zhcnDict = {
                     <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Play size={22} /> {t("一、如何開始遊玩？", "1. How to Play?")}</h2>
                     <p>{t("只需簡單三步，您就能進入背經的挑戰中！", "Just three simple steps to start your scripture memorization challenge!")}</p>
 
-                    <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("1. 從大廳進入「經文題庫」", "1. Open \"Scripture Sets\" from the lobby")}</h3>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("在大廳點 <strong>「經文題庫」</strong> 卡片，就會看到系統與玩家建立的所有公開經文組，可依最新、標題或最受歡迎排序。", "Tap the <strong>\"Scripture Sets\"</strong> card in the lobby to see every public verse set created by the system and by players. Sort by newest, title, or most popular.") }} /></p>
+                    <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("1. 從大廳進入「聽與說」", "1. Open \"Scripture Sets\" from the lobby")}</h3>
+                    <p><span dangerouslySetInnerHTML={{ __html: t("在大廳點 <strong>「聽與說」</strong> 卡片，就會看到系統與玩家建立的所有公開經文組，可依最新、標題或最受歡迎排序。", "Tap the <strong>\"Scripture Sets\"</strong> card in the lobby to see every public verse set created by the system and by players. Sort by newest, title, or most popular.") }} /></p>
                     <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("2. 選擇想要挑戰的經文組", "2. Select a Verse Set")}</h3>
                     <p><span dangerouslySetInnerHTML={{ __html: t("點選列表中的標題（例如：<strong>約翰福音 核心經文</strong>），進入經文組頁面，裡面列出每一節經文，右側有「播放」「排行榜」「挑戰」「分享」等按鈕。", "Tap a title in the list (e.g. <strong>Gospel of John Core Verses</strong>) to open the set page, which lists every verse with Play, Leaderboard, Challenge, and Share buttons.") }} /></p>
                     <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("3. 開始挑戰", "3. Start the Challenge")}</h3>
                     <p><span dangerouslySetInnerHTML={{ __html: t("點該節右側的綠色 <strong>⚡ 挑戰</strong> 鍵，選擇遊戲模式（九宮格／經文雨／語音模式）與難度，按「開始挑戰」——三秒後經文雨就傾盆而下！依正確順序點擊落下的方塊，越快完成、時間加成越高。", "Tap the green <strong>⚡ Challenge</strong> button next to a verse, choose the game mode (Square / Verse Rain / Voice Mode) and difficulty, then press \"Start Challenge\" — three seconds later the verse rain pours down! Tap the falling blocks in the right order; the faster you finish, the bigger the time bonus.") }} /></p>
-                    <ManualVideo src="/manual/start-game.mp4" poster="/manual/start-game.jpg" caption={t("教學影片：從大廳進入經文題庫 → 選經文組 → ⚡ 挑戰 → 選模式 → 依序點擊方塊，完成一次挑戰。", "Tutorial: lobby → Scripture Sets → pick a set → ⚡ Challenge → choose a mode → tap the blocks in order to finish a challenge.")} />
+                    <ManualVideo src="/manual/start-game.mp4" poster="/manual/start-game.jpg" caption={t("教學影片：從大廳進入聽與說 → 選經文組 → ⚡ 挑戰 → 選模式 → 依序點擊方塊，完成一次挑戰。", "Tutorial: lobby → Scripture Sets → pick a set → ⚡ Challenge → choose a mode → tap the blocks in order to finish a challenge.")} />
 
                     <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Edit size={24} /> {t("二、如何自建專屬「經文組」？", "2. How to Build Your Own \"Verse Set\"")}</h2>
                     <p>{t("只要登入帳號，任何人都可以打造自己的主日學、小組或個人靈修專屬題庫，建好就能聆聽、挑戰、分享。", "Any signed-in user can build a verse set for Sunday school, a small group or personal devotion, then listen to it, challenge it and share it.")}</p>
                     <ol style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("先<strong>登入</strong>，再從大廳點 <strong>「經文題庫」</strong>，進入上方的 <strong>「我的專屬題庫」</strong>。", "<strong>Sign in</strong>, open <strong>\"Scripture Sets\"</strong> from the lobby, then go to <strong>\"My Custom Sets\"</strong> at the top.") }} /></li>
+                      <li><span dangerouslySetInnerHTML={{ __html: t("先<strong>登入</strong>，再從大廳點 <strong>「聽與說」</strong>，進入上方的 <strong>「我的專屬題庫」</strong>。", "<strong>Sign in</strong>, open <strong>\"Scripture Sets\"</strong> from the lobby, then go to <strong>\"My Custom Sets\"</strong> at the top.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("點 <strong>「＋ 建立新題庫」</strong>，填上標題與簡介；也可以挑一張背景圖片、選背景音樂或上傳自己的音樂。", "Tap <strong>\"+ Create New Set\"</strong>, give it a title and a description; you can also pick a background image and background music (or upload your own).") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("在經文列表選好書卷、輸入 <strong>章:節</strong>（如 <code>3:16</code> 或 <code>6:9-13</code>），按 <strong>Enter 或 Tab</strong>，系統就會自動抓取完整經文。", "In the verse list pick the book, type the <strong>chapter:verse</strong> (e.g. <code>3:16</code> or <code>6:9-13</code>) and press <strong>Enter or Tab</strong> — the full text is fetched for you.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("經文很多？用 <strong>「輸入出處批次匯入」</strong>，一次貼上多個出處（每行一個或用逗號分隔）。逗號後面的純節數會接在同一章：<code>約翰福音 1:1, 4</code> 就是 1:1 與 1:4。", "Many verses? Use <strong>\"Import by references\"</strong> and paste several references at once (one per line or comma-separated). A bare verse number after a comma stays in the same chapter: <code>John 1:1, 4</code> means 1:1 and 1:4.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("每一節旁邊都有 🎙️ 麥克風，可以順手錄下自己的親聲朗讀。", "Each verse row has a 🎙️ mic so you can record your own reading right there.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("確認無誤後點 <strong>「儲存題庫」</strong>。這份經文組就會出現在「經文題庫」，大家都可以聆聽與挑戰。", "When everything looks right, tap <strong>\"Save Set\"</strong>. The set appears in \"Scripture Sets\" for everyone to listen to and challenge.") }} /></li>
+                      <li><span dangerouslySetInnerHTML={{ __html: t("確認無誤後點 <strong>「儲存題庫」</strong>。這份經文組就會出現在「聽與說」，大家都可以聆聽與挑戰。", "When everything looks right, tap <strong>\"Save Set\"</strong>. The set appears in \"Scripture Sets\" for everyone to listen to and challenge.") }} /></li>
                     </ol>
                     <div style={{ backgroundColor: '#f0fdf4', borderLeft: '4px solid #22c55e', padding: '1rem', borderRadius: '4px', marginBottom: '3rem' }}>
                       <span dangerouslySetInnerHTML={{ __html: t("<strong>提示：</strong>經文抓取串接了各語言的聖經資料庫（和合本、ESV、KJV…），能大幅省去打字與校稿的時間；建好的經文組還能用「翻譯」一鍵在地化到其他語言（見第七章）。", "<strong>Tip:</strong> Verse fetching is wired to Bible databases in every supported language (CUV, ESV, KJV…), which saves a lot of typing and proofreading; a finished set can also be localized to another language with one tap via \"Translate\" (see section 7).") }} />
@@ -14986,13 +14621,13 @@ const zhcnDict = {
                     <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
                       <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⏱️ 播放時間：</strong>可設定播放幾分鐘後自動停止，或無限循環播放——睡前、靈修時段都好用。", "<strong>⏱️ Duration:</strong> Set playback to stop after a number of minutes, or loop forever — handy at bedtime or during devotions.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("<strong>🔠 字體大小：</strong>同一個視窗裡可以調整聆聽畫面的字級，長輩或投影使用時把字放大更清楚。", "<strong>🔠 Font size:</strong> Adjust the text size of the listen screen in the same dialog — bigger for seniors or projection.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⭐ 我的最愛：</strong>聆聽時點播放器上的星星，或在「我的專屬題庫」的卡片上點星星，就能把經文組加入我的最愛。清單可用「我的最愛」排序，而且會跟著帳號同步到每一台裝置；從大廳「話語甘霖」進入後，也能直接挑「我的最愛」來聽。", "<strong>⭐ Favorites:</strong> Tap the star on the player, or on a card in \"My Custom Sets\", to add a verse set to your favorites. Sort the list by \"Favorites\", and they sync with your account across all devices. Entering from the lobby's \"Verse Rain\" card, you can pick \"Favorites\" to listen right away.") }} /></li>
+                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⭐ 我的最愛：</strong>聆聽時點播放器上的星星，或在「我的專屬題庫」的卡片上點星星，就能把經文組加入我的最愛。清單可用「我的最愛」排序，而且會跟著帳號同步到每一台裝置；從大廳「好文欣賞」進入後，也能直接挑「我的最愛」來聽。", "<strong>⭐ Favorites:</strong> Tap the star on the player, or on a card in \"My Custom Sets\", to add a verse set to your favorites. Sort the list by \"Favorites\", and they sync with your account across all devices. Entering from the lobby's \"Verse Rain\" card, you can pick \"Favorites\" to listen right away.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("<strong>▶️ 一鍵播放：</strong>「我的專屬題庫」每張卡片都多了「播放」鍵，不必先進入經文組就能開始連續聆聽（可選隨機或按序）。", "<strong>▶️ One-tap Play:</strong> Every card in \"My Custom Sets\" now has a \"Play\" button — start continuous listening (random or in order) without opening the set first.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("<strong>🔄 雙語對調：</strong>讀經頁的「朗讀第二語言」按鈕會暫時把主／次語言互換，改用第二語言落字並朗讀，原語言退到下方小字；離開後自動還原，練習外語聽讀很方便。", "<strong>🔄 Swap languages:</strong> The reader's \"Read the second language\" button temporarily swaps your primary and secondary languages — the verse falls and is read aloud in the second language while the original shows below in small text. It reverts when you leave; great for practicing a foreign language.") }} /></li>
                       <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⚡ 邊聽邊挑戰：</strong>聆聽中按 ⚡ 立刻挑戰這一節；結束後按「返回朗讀」會回到同一節並暫停等你，按播放或 ‹ › 就能接著聽下一節。", "<strong>⚡ Challenge while listening:</strong> Tap ⚡ while listening to challenge the current verse. When it ends, \"Back to reading\" returns you to the same verse, paused; press Play or ‹ › to continue.") }} /></li>
                     </ul>
                     <ManualVideo src="/manual/play-mode.mp4" poster="/manual/play-mode.jpg" caption={t("教學影片：在經文組頁按「播放」→ 播放方式視窗設定播放時間、字體大小、聲音來源 → 選「按序」開始連續聆聽。", "Tutorial: press \"Play\" on a set page → set duration, font size and voice source in the Play Mode dialog → choose \"In Order\" to start continuous listening.")} />
-                    <ManualVideo src="/manual/listen.mp4" poster="/manual/listen.jpg" caption={t("教學影片：大廳「話語甘霖」→ 選「每日經文」或主題經文 → 按「朗讀」做雙語對調（改用第二語言朗讀）→ 按「切換聲音」選電腦語音、無聲音或親聲。", "Tutorial: lobby \"Verse Rain\" → pick \"Daily Verse\" or a topic → press \"Read\" to swap languages (read in the second language) → \"Switch voice\" to choose computer voice, no voice, or a recorded voice.")} />
+                    <ManualVideo src="/manual/listen.mp4" poster="/manual/listen.jpg" caption={t("教學影片：大廳「好文欣賞」→ 選「每日經文」或主題經文 → 按「朗讀」做雙語對調（改用第二語言朗讀）→ 按「切換聲音」選電腦語音、無聲音或親聲。", "Tutorial: lobby \"Verse Rain\" → pick \"Daily Verse\" or a topic → press \"Read\" to swap languages (read in the second language) → \"Switch voice\" to choose computer voice, no voice, or a recorded voice.")} />
                     <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Languages size={22} /> {t("七、經文組一鍵「翻譯」到其他語言", "7. Translate a Verse Set into Other Languages in One Click")}</h2>
                     <p><span dangerouslySetInnerHTML={{ __html: t("辛苦建好的經文組，想給說別種語言的弟兄姊妹用？現在不必重打一次。", "Built a great verse set and want to share it with brothers and sisters who speak another language? No need to retype it.") }} /></p>
                     <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
@@ -16255,7 +15890,7 @@ const zhcnDict = {
                           localStorage.removeItem('verseRain_gardenData');
                           setGardenData({});
                         }
-                        const isPrem = data.user.isPremium || PREMIUM_EMAILS.includes((data.user.email || '').toLowerCase());
+                        const isPrem = !!data.user.isPremium;
                         setPlayerName(data.user.name || email.split('@')[0]);
                         setUserEmail(data.user.email);
                         setIsPremium(isPrem);
@@ -16536,114 +16171,6 @@ const zhcnDict = {
             </div>
           </div>
         )}
-        {translateModal && (() => {
-          const tm = translateModal;
-          const langLabel = (BIBLE_LANGUAGE_OPTIONS.find(o => o.value === tm.target) || {}).label || tm.target;
-          const closeModal = () => setTranslateModal(null);
-          const switchAndClose = () => { const target = tm.target; setTranslateModal(null); handleVersionChange(target); };
-          return (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1500, padding: '1rem' }} onClick={(e) => { if (e.target === e.currentTarget && tm.phase !== 'working') closeModal(); }}>
-            <div style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '520px', maxHeight: '86vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-              <div style={{ padding: '1.1rem 1.3rem 0.8rem', borderBottom: '1px solid #eef2f7', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: 6 }}><Languages size={20} /> {t('翻譯經文組', 'Translate verse set')}</div>
-                  <div style={{ color: '#64748b', fontSize: '0.85rem', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tm.set?.title}</div>
-                </div>
-                {(tm.phase !== 'working') && (
-                  <button onClick={closeModal} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, flexShrink: 0 }}><XCircle size={22} /></button>
-                )}
-              </div>
-
-              {tm.phase === 'pick' && (
-                <div style={{ padding: '1.1rem 1.3rem 1.3rem' }}>
-                  <label style={{ display: 'block', fontWeight: 700, color: '#334155', marginBottom: '0.5rem', fontSize: '0.95rem' }}>{t('翻譯成哪一種語言？', 'Translate into which language?')}</label>
-                  <select
-                    value={tm.target}
-                    onChange={(e) => setTranslateModal(m => (m ? { ...m, target: e.target.value } : m))}
-                    style={{ width: '100%', padding: '0.6rem 0.7rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', color: '#1e293b', fontSize: '1rem', cursor: 'pointer' }}
-                  >
-                    <option value="" disabled>{t('請選擇語言…', 'Choose a language…')}</option>
-                    {BIBLE_LANGUAGE_OPTIONS.filter(o => o.value !== version).map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  <div style={{ marginTop: '0.8rem', fontSize: '0.82rem', color: '#64748b', lineHeight: 1.6, background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 8, padding: '0.6rem 0.7rem' }}>
-                    {t('會自動翻譯標題、把每節出處換成該語言的書名、並抓取該語言官方譯本的經文。簡介會留空，請加入後自行以該語言填寫。', "The title is auto-translated, each reference is remapped to that language's book names, and the official verse text in that language is fetched. The description is left blank — write your own in that language after adding.")}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1.1rem' }}>
-                    <button onClick={closeModal} style={{ background: 'transparent', border: '1px solid #cbd5e1', color: '#64748b', borderRadius: 8, padding: '0.55rem 1rem', cursor: 'pointer', fontWeight: 600 }}>{t('取消', 'Cancel')}</button>
-                    <button onClick={runSetTranslation} disabled={!tm.target} style={{ background: tm.target ? '#0ea5e9' : '#cbd5e1', color: '#fff', border: 'none', borderRadius: 8, padding: '0.55rem 1.2rem', cursor: tm.target ? 'pointer' : 'not-allowed', fontWeight: 800 }}>{t('開始翻譯', 'Translate')}</button>
-                  </div>
-                </div>
-              )}
-
-              {tm.phase === 'working' && (
-                <div style={{ padding: '1.6rem 1.3rem 1.8rem', textAlign: 'center' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.6rem' }}>🌧️</div>
-                  <div style={{ fontWeight: 700, color: '#1e293b' }}>{t('翻譯中…', 'Translating…')}</div>
-                  <div style={{ color: '#64748b', fontSize: '0.9rem', marginTop: 4 }}>
-                    {langLabel} · {(tm.progress?.done || 0)}/{(tm.progress?.total || 0)}
-                  </div>
-                  <div style={{ marginTop: '0.9rem', height: 8, background: '#eef2f7', borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${tm.progress?.total ? Math.round((tm.progress.done / tm.progress.total) * 100) : 0}%`, background: 'linear-gradient(90deg,#38bdf8,#0ea5e9)', transition: 'width 0.2s' }} />
-                  </div>
-                </div>
-              )}
-
-              {tm.phase === 'exists' && (
-                <div style={{ padding: '1.3rem' }}>
-                  <div style={{ color: '#334155', lineHeight: 1.6 }}>
-                    {t('這個經文組已經有「{lang}」版本了。', 'A {lang} version of this set already exists.').replace('{lang}', langLabel)}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1.2rem' }}>
-                    <button onClick={closeModal} style={{ background: 'transparent', border: '1px solid #cbd5e1', color: '#64748b', borderRadius: 8, padding: '0.55rem 1rem', cursor: 'pointer', fontWeight: 600 }}>{t('取消', 'Cancel')}</button>
-                    <button onClick={switchAndClose} style={{ background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 8, padding: '0.55rem 1.2rem', cursor: 'pointer', fontWeight: 800 }}>{t('切換到該語言查看', 'Switch to that language')}</button>
-                  </div>
-                </div>
-              )}
-
-              {tm.phase === 'preview' && (
-                <>
-                  <div style={{ padding: '1rem 1.3rem 0.4rem', overflowY: 'auto' }}>
-                    <label style={{ display: 'block', fontWeight: 700, color: '#334155', marginBottom: '0.35rem', fontSize: '0.9rem' }}>{t('標題（可修改）', 'Title (editable)')}</label>
-                    <input
-                      value={tm.title || ''}
-                      onChange={(e) => setTranslateModal(m => (m ? { ...m, title: e.target.value } : m))}
-                      style={{ width: '100%', padding: '0.55rem 0.7rem', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '1rem', color: '#0f172a', boxSizing: 'border-box' }}
-                    />
-                    <div style={{ marginTop: '0.9rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                      {(tm.verses || []).map((v, i) => (
-                        <div key={i} style={{ border: '1px solid #eef2f7', borderRadius: 8, padding: '0.5rem 0.65rem', background: v.failed ? '#fef2f2' : '#f8fafc' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{v.reference || t('（無法解析出處）', '(unparsed reference)')}</div>
-                            {v.failed && (
-                              <button onClick={() => retryTranslateVerse(i)} disabled={v.retrying} style={{ flexShrink: 0, background: '#fff', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 999, padding: '0.15rem 0.6rem', fontSize: '0.78rem', fontWeight: 700, cursor: v.retrying ? 'default' : 'pointer' }}>{v.retrying ? t('重試中…', 'Retrying…') : `⚠ ${t('重試', 'Retry')}`}</button>
-                            )}
-                          </div>
-                          <div style={{ color: v.failed ? '#b91c1c' : '#475569', fontSize: '0.85rem', marginTop: 3, lineHeight: 1.5 }}>
-                            {v.text ? v.text : t('找不到這節經文，可重試或先加入之後再用「編輯」補上。', 'Verse text not found — retry, or add now and fill it in later via Edit.')}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: '0.7rem', fontSize: '0.8rem', color: '#94a3b8' }}>{t('※ 簡介會留空，請加入後自行填寫。', '※ The description is left blank — write your own after adding.')}</div>
-                  </div>
-                  <div style={{ padding: '0.9rem 1.3rem', borderTop: '1px solid #eef2f7', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                      {(() => { const ok = (tm.verses || []).filter(v => v.text).length; const total = (tm.verses || []).length; return `${ok}/${total} ${t('節有內文', 'verses ready')}`; })()}
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.6rem' }}>
-                      <button onClick={closeModal} style={{ background: 'transparent', border: '1px solid #cbd5e1', color: '#64748b', borderRadius: 8, padding: '0.55rem 1rem', cursor: 'pointer', fontWeight: 600 }}>{t('取消', 'Cancel')}</button>
-                      <button onClick={publishTranslatedSet} disabled={!(tm.title || '').trim()} style={{ background: (tm.title || '').trim() ? '#10b981' : '#cbd5e1', color: '#fff', border: 'none', borderRadius: 8, padding: '0.55rem 1.2rem', cursor: (tm.title || '').trim() ? 'pointer' : 'not-allowed', fontWeight: 800 }}>{t('加入並編輯', 'Add & edit')}</button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-            </div>
-          </div>
-          );
-        })()}
         {showPushPrompt && !deepLinkStartGate && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100, padding: '1rem' }} onClick={(e) => { if (e.target === e.currentTarget) snoozePushPrompt(); }}>
             <div style={{ background: '#fff', borderRadius: '14px', padding: '1.8rem 1.6rem', width: '100%', maxWidth: '420px', boxShadow: '0 20px 40px rgba(0,0,0,0.18)', textAlign: 'center' }}>
