@@ -1,7 +1,7 @@
 {
-  "name": "VerseRain 經文雨",
-  "short_name": "VerseRain",
-  "description": "Bible verse memorization game with daily verses and challenges.",
+  "name": "聽&說 Listen&Speak",
+  "short_name": "聽&說",
+  "description": "雙語聽讀跟說：唐詩、好文，中英對照，注音／拼音，親聲錄音與背誦挑戰。",
   "id": "/",
   "start_url": "/",
   "scope": "/",
