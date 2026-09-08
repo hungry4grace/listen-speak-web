@@ -11,7 +11,7 @@ import { voiceId, voiceMatchesSavedKey, dedupeVoices, buildVoiceOptions } from '
 import { splitVersePhrases } from './lib/phraseSplitter.js';
 import { stripBollsMarkup, stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
-import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor } from './lib/lang.js';
+import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf } from './lib/lang.js';
 import { localizeSet, itemZh, itemEn, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
 import './index.css';
 import { BIBLE_BOOKS, getBookAbbr, getBookFullName } from './bibleDictionary';
@@ -2200,6 +2200,8 @@ function getDailyVerseIndex(length, date = new Date()) {
 }
 
 function getDailyVerseRemoteVersion(version) {
+  return null; // 聽&說: 每日一首 comes from the built-in pack, no remote daily verse
+
   if (version === 'kjv' || version === 'esv' || version === 'niv' || version === 'cuv' || version === 'cuvs') return version;
   return null;
 }
@@ -6649,13 +6651,10 @@ export default function App() {
   const [isLobbyReading, setIsLobbyReading] = React.useState(false);
   const lobbyReadRunRef = React.useRef(0);
   const preferredRainSet = React.useMemo(() => {
-    const rainSets = activeVerseSets.filter(s => s.id && s.id.startsWith('rain-verses'));
+    // 每日一首 / lobby quote pool: the quatrain packs read best as one-liners.
+    const rainSets = activeVerseSets.filter(s => s.id && (s.id.startsWith('rain-verses') || /jueju$/.test(s.id)));
     if (!rainSets.length) return null;
-    return (
-      rainSets.find(s => s.language === version && s.id.endsWith(`-${version}`)) ||
-      rainSets.find(s => s.language === version) ||
-      rainSets[0]
-    );
+    return rainSets.find(s => s.id === 'tang300-wuyan-jueju') || rainSets[0];
   }, [activeVerseSets, version]);
   const getSetsForVersion = React.useCallback((targetVersion) => {
     const localSets = loadedLangs[targetVersion]?.sets || [];
@@ -6803,7 +6802,11 @@ export default function App() {
     remoteDailyVerse?.date === dailyVerseDate;
   const displayedDailyVerse = remoteDailyVerseMatches ? remoteDailyVerse : (isDailyVerseLoading ? null : dailyVerse);
   const dailySecondaryVerseSet = React.useMemo(() => {
-    if (!displayedDailyVerse || !bilingualSecondaryVersion || bilingualSecondaryVersion === version) return null;
+    if (!displayedDailyVerse || !bilingualSecondaryVersion || baseLang(bilingualSecondaryVersion) === baseLang(version)) return null;
+    if (isBilingualItem(displayedDailyVerse)) {
+      const loc = localizeSet({ verses: [displayedDailyVerse] }, bilingualSecondaryVersion).verses[0];
+      return { id: `daily-secondary-${bilingualSecondaryVersion}-${dailyVerseDate}`, title: langLabelOf(bilingualSecondaryVersion), verses: [loc] };
+    }
     const secondarySets = getSetsForVersion(bilingualSecondaryVersion);
     for (const set of secondarySets) {
       const match = findMatchingVerse(displayedDailyVerse, [displayedDailyVerse], set.verses || [], { allowIndexFallback: false });
