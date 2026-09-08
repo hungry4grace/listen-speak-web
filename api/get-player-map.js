@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { prefixedRedis } from '../lib/redisPrefix.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
   if (!redisUrl || !redisToken) return res.status(200).json([]);
 
   try {
-    const redis = new Redis({ url: redisUrl, token: redisToken });
+    const redis = prefixedRedis(new Redis({ url: redisUrl, token: redisToken }));
 
     const playerNames = await redis.smembers('map:players');
     if (!playerNames || playerNames.length === 0) return res.status(200).json([]);

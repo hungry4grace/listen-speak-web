@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { prefixedRedis } from '../lib/redisPrefix.js';
 
 // GET /api/get-name-by-code?code=XXXXXXXXXX
 // Returns { name } for a known personalCode → playerName mapping. Used by
@@ -20,7 +21,7 @@ export default async function handler(req, res) {
   if (!redisUrl || !redisToken) return res.status(200).json({ name: null, mocked: true });
 
   try {
-    const redis = new Redis({ url: redisUrl, token: redisToken });
+    const redis = prefixedRedis(new Redis({ url: redisUrl, token: redisToken }));
     const name = await redis.hget('player_mapping', code);
     return res.status(200).json({ name: name || null });
   } catch (error) {

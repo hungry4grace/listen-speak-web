@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { prefixedRedis } from '../lib/redisPrefix.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true)
@@ -21,7 +22,7 @@ export default async function handler(req, res) {
   if (!redisUrl || !redisToken) return res.status(200).json({ success: true, mocked: true });
 
   try {
-    const redis = new Redis({ url: redisUrl, token: redisToken });
+    const redis = prefixedRedis(new Redis({ url: redisUrl, token: redisToken }));
     let actualAmount = 0;
     
     if (player && verseSetName) {

@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { prefixedRedis } from '../lib/redisPrefix.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true)
@@ -29,10 +30,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const redis = new Redis({
+    const redis = prefixedRedis(new Redis({
       url: redisUrl,
       token: redisToken,
-    });
+    }));
 
     const zsetKey = `leaderboard:set:${setId}`;
     const metaKey = `leaderboard_meta:set:${setId}`;
