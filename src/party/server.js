@@ -185,7 +185,7 @@ export default class Server {
           "Authorization": `Bearer ${resendApiKey}`
         },
         body: JSON.stringify({
-          from: "VerseRain <noreply@verserain.com>",
+          from: "聽&說 Listen&Speak <noreply@verserain.com>",
           to: to,
           subject: subject,
           html: html
@@ -634,13 +634,13 @@ export default class Server {
               // Send the OTP via email
               const emailHtml = `
                 <div style="font-family: sans-serif; color: #333;">
-                  <h2>歡迎加入 VerseRain！</h2>
+                  <h2>歡迎加入 聽&說 Listen&Speak！</h2>
                   <p>您的帳號驗證碼為：</p>
                   <h1 style="color: #3b82f6; letter-spacing: 5px;">${verificationCode}</h1>
                   <p>請在應用程式中輸入此驗證碼以啟用您的帳號。</p>
                 </div>
               `;
-              await this.sendEmail(email.toLowerCase(), "VerseRain 帳號驗證碼 (Account Verification)", emailHtml);
+              await this.sendEmail(email.toLowerCase(), "聽&說 帳號驗證碼 (Listen&Speak Account Verification)", emailHtml);
               
               return new Response(JSON.stringify({ success: true, message: 'Verification email sent' }), { status: 200, headers: corsHeaders });
            } catch(e) {
@@ -966,10 +966,10 @@ export default class Server {
               const expiresAt = Date.now() + RESET_TOKEN_TTL_MS;
               await this.room.storage.put(`reset:${tokenHash}`, { email: email.toLowerCase(), expiresAt });
 
-              const resetUrl = `https://www.verserain.com/?resetToken=${token}`;
+              const resetUrl = `https://listenspeak.verserain.com/?resetToken=${token}`;
               const emailHtml = `
                 <div style="font-family: sans-serif; color: #333;">
-                  <h2>VerseRain 重設密碼</h2>
+                  <h2>聽&說 重設密碼</h2>
                   <p>您好，${user.name || '玩家'}！</p>
                   <p>請點下面的按鈕設定新密碼。這個連結 <strong>30 分鐘內有效</strong>，且只能使用一次。</p>
                   <p style="margin: 24px 0;">
@@ -979,7 +979,7 @@ export default class Server {
                   <p style="font-size: 12px; color: #666;">如果不是您本人要求重設密碼，請忽略這封信，您的密碼不會有任何變動。</p>
                 </div>
               `;
-              const emailResult = await this.sendEmail(email.toLowerCase(), "VerseRain 重設密碼 (Reset your password)", emailHtml);
+              const emailResult = await this.sendEmail(email.toLowerCase(), "聽&說 重設密碼 (Listen&Speak: reset your password)", emailHtml);
 
               if (!emailResult.success) {
                  return new Response(JSON.stringify({ error: '發送電子郵件失敗 (Failed to send email)' }), { status: 500, headers: corsHeaders });
@@ -2409,7 +2409,7 @@ export default class Server {
     }
 
     // Default route for other random requests to gameplay rooms (if any)
-    return new Response("VerseRain Gameplay Room HTTP endpoint OK", { status: 200 });
+    return new Response("Listen&Speak Gameplay Room HTTP endpoint OK", { status: 200 });
   }
 
   onConnect(conn, ctx) {
