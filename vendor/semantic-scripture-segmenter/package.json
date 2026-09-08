@@ -1,0 +1,22 @@
+{
+  "name": "@verserain-contrib/semantic-scripture-segmenter",
+  "version": "0.1.0",
+  "description": "An opt-in semantic segmenter for Traditional Chinese Scripture memory games.",
+  "type": "module",
+  "private": true,
+  "exports": "./src/index.js",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm test && npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "bible",
+    "chinese",
+    "memorization",
+    "segmentation"
+  ],
+  "license": "MIT"
+}

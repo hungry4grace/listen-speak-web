@@ -25,7 +25,7 @@
 
 // The segmenter is vendored at the repo root, one level above this app's Vite
 // root; the relative path reaches it and Rollup bundles it at build time.
-import segmentScripture from '../../../contrib/semantic-scripture-segmenter/src/index.js';
+import segmentScripture from '../../vendor/semantic-scripture-segmenter/src/index.js';
 
 // Quote/bracket characters are stripped from phrase edges rather than split on,
 // so an opening 「 doesn't produce an empty leading block.
