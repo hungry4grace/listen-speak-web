@@ -12,7 +12,7 @@ import { splitVersePhrases } from './lib/phraseSplitter.js';
 import { stripBollsMarkup, stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
 import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf } from './lib/lang.js';
-import { localizeSet, itemZh, itemEn, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
+import { localizeSet, itemZh, itemEn, pickText, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
 import Annotated from './Annotated.jsx';
 import { loadAnnotator } from './lib/annotate.js';
 import './index.css';
@@ -7380,8 +7380,13 @@ export default function App() {
   useEffect(() => { versionRef.current = version; }, [version]);
   const localizedTextByRefRef = useRef({}); // `${ver}|${normKey}` -> resolved text ('' = unresolvable)
   const [localizedTick, setLocalizedTick] = useState(0); // bumps when a verse finishes localizing (triggers reactive swap)
-  const resolveVerseTextForVersion = async (reference, ver) => {
+  const resolveVerseTextForVersion = async (reference, ver, item = null) => {
     if (!reference || !ver) return null;
+    // tier 0: 聽&說 bilingual items carry both sides — pick the player's side directly.
+    if (isBilingualItem(item)) {
+      const side = pickText(item, ver);
+      if (side) return side;
+    }
     const normKey = normalizeVerseReferenceKey(reference);
     // tier 1: a set already loaded in that language (instant, no network)
     try {
@@ -7426,6 +7431,11 @@ export default function App() {
     } catch { /* ignore */ }
     return reference;
   };
+  // Both language sides of a bilingual item, sent alongside verseText so that
+  // players in a single-verse room can localize without the campaign queue.
+  const verseSidesOf = (v) => (isBilingualItem(v)
+    ? { textZh: itemZh(v), textEn: itemEn(v), ...(v?.textCn ? { textCn: v.textCn } : {}) }
+    : null);
   // NOTE: the pre-resolve effect lives after the multiplayer state declarations
   // (it depends on multiplayerState / multiplayerRoomId).
 
@@ -8213,7 +8223,7 @@ export default function App() {
     if (!multiplayerRoomId || !st?.playMode?.endsWith('_solo')) return undefined;
     const queue = (st.campaignQueue && st.campaignQueue.length)
       ? st.campaignQueue
-      : (st.verseRef ? [{ reference: st.verseRef, text: st.verseText }] : []);
+      : (st.verseRef ? [{ reference: st.verseRef, text: st.verseText, ...(st.verseSides || {}) }] : []);
     if (!queue.length) return undefined;
     let cancelled = false;
     (async () => {
@@ -8222,7 +8232,7 @@ export default function App() {
         if (!v?.reference) continue;
         const cacheKey = `${version}|${normalizeVerseReferenceKey(v.reference)}`;
         if (localizedTextByRefRef.current[cacheKey] !== undefined) continue;
-        const text = await resolveVerseTextForVersion(v.reference, version);
+        const text = await resolveVerseTextForVersion(v.reference, version, v);
         if (cancelled) return;
         localizedTextByRefRef.current[cacheKey] = text || '';
         if (text) setLocalizedTick(n => n + 1); // wake the reactive swap below
@@ -8346,6 +8356,7 @@ export default function App() {
             blocks: newBlocks,
             verseRef: nextVerse.reference,
             verseText: nextVerse.text,
+            verseSides: verseSidesOf(nextVerse),
             phrases: phrases
           }));
         }
@@ -9261,6 +9272,7 @@ export default function App() {
               blocks: [],
               verseRef: verse.reference,
               verseText: verse.text,
+              verseSides: verseSidesOf(verse),
               playMode: initAutoStart.playMode,
               distractionLevel: multiplayerDistractionLevel,
               phrases: phrases,
@@ -9346,6 +9358,7 @@ export default function App() {
         blocks: newBlocks,
         verseRef: verse.reference,
         verseText: verse.text,
+        verseSides: verseSidesOf(verse),
         playMode: actualPlayMode,
         distractionLevel: distractionLevel,
         phrases: phrases,

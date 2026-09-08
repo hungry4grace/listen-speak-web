@@ -2548,6 +2548,7 @@ export default class Server {
           this.state.currentSeqIndex = 0;
           this.state.verseRef = data.verseRef;
           this.state.verseText = data.verseText;
+          this.state.verseSides = data.verseSides || null;
           this.state.playMode = data.playMode;
           this.state.distractionLevel = data.distractionLevel;
           this.state.phrases = data.phrases;
@@ -2586,6 +2587,7 @@ export default class Server {
           this.state.currentSeqIndex = 0;
           this.state.verseRef = data.verseRef;
           this.state.verseText = data.verseText;
+          this.state.verseSides = data.verseSides || null;
           this.state.phrases = data.phrases;
           
           // Reset player scores and health ONLY for this new round!
@@ -2799,6 +2801,7 @@ export default class Server {
         this.state.status = 'waiting';
         this.state.verseRef = null;
         this.state.verseText = null;
+        this.state.verseSides = null;
         this.state.blocks = [];
         this.state.currentSeqIndex = 0;
         this.state.phrases = [];
