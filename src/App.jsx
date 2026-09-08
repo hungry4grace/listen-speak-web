@@ -10161,7 +10161,7 @@ const zhcnDict = {
   "換一個": "换一个",
   "與家人朋友分享房間碼來PK同樂！": "与家人朋友分享房间码来PK同乐！",
   "挑戰全球內容集，鍛鍊記憶力與專注力。": "挑战全球内容集，锻炼记忆力与专注力。",
-  "主話如霖澆我田，歲歲結果到豐年。": "检视你已经学会并种下生命树的内容。",
+  "日日澆灌讀書田，年年結果滿枝頭。": "日日浇灌读书田，年年结果满枝头。",
   "選擇你喜歡的語音，首頁「讀經」及遊戲中的語音都會使用此設定。": "选择你喜欢的语音，首页“读经”及游戏中的语音都会使用此设定。",
   "我的內容集": "我的内容集",
   "新增內容集": "新增内容集",
@@ -10276,7 +10276,7 @@ const zhcnDict = {
   Object.assign(zhcnDict, {
     '團隊競賽': '团队竞赛',
     '內容庫': '内容库',
-    '經題萬卷勤溫故，句句生光照此程。': '浏览全球内容集，挑选内容开始练习。',
+    "聽一聽，說一說，中英對照學得快。": "听一听，说一说，中英对照学得快。",
     '同心競走天路程，並肩得勝主名榮。': '建立房间，分队一起挑战内容。',
     '老師先選擇隊伍數量，再建立房間。學生加入一個聖靈果子隊伍，最後用隊伍平均分排名。': '老师先选择队伍数量，再建立房间。学生加入一个圣灵果子队伍，最后用队伍平均分排名。',
     '隊伍數量': '队伍数量',
@@ -10401,7 +10401,7 @@ const zhcnDict = {
     "語音：": "语音：",
     "我收到的鼓勵": "我收到的鼓励",
     "多人遊戲": "多人游戏",
-    "同心走過天路程，並肩玩出主榮耀。": "同心走过天路程，并肩玩出主荣耀。",
+    "同窗同樂共背誦，你來我往比高低。": "同窗同乐共背诵，你来我往比高低。",
     "雙語內容雨 Beta": "双语内容雨 Beta",
     "返回進階功能": "返回进阶功能",
     "測試版會用主要語言朗讀，並在每個方塊下方顯示第二語言。第二行目前是短句估算對齊，適合先測試閱讀感。": "测试版会用主要语言朗读，并在每个方块下方显示第二语言。第二行目前是短句估算对齐，适合先测试阅读感。",
@@ -11043,28 +11043,28 @@ const zhcnDict = {
                     <div className="primary-button" onClick={() => { setOpenDailyPickerOnEnter(true); setMainTab('daily_verse'); }} style={{ background: 'linear-gradient(135deg, #818cf8, #6366f1 55%, #4338ca)', borderRadius: '16px', padding: isNarrowEditor ? '0.3rem 0.6rem' : '2.5rem 2rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center', boxShadow: '0 10px 28px rgba(79, 70, 229, 0.35)' }}>
                       <CloudRain size={isNarrowEditor ? 46 : 72} style={{ marginBottom: isNarrowEditor ? '0.15rem' : '1rem' }} />
                       <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t('好文欣賞', 'Good Reads')}</h2>
-                      <p style={{ ...tileCaptionStyle(0.95) }}>{splitCaption(t("每日一句神的話，心意更新而變化。", "A paragraph a day to renew your mind."))}</p>
+                      <p style={{ ...tileCaptionStyle(0.95) }}>{splitCaption(t("每日一首好詩文，聲聲入耳記在心。", "A poem a day, heard and kept by heart."))}</p>
                     </div>
 
                     {/* My Garden */}
                     <div className="primary-button" onClick={() => setMainTab('garden')} style={{ background: 'linear-gradient(135deg, #34d399, #10b981)', borderRadius: '16px', padding: isNarrowEditor ? '0.3rem 0.6rem' : '2.5rem 2rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center' }}>
                       <TreePine size={isNarrowEditor ? 46 : 72} style={{ marginBottom: isNarrowEditor ? '0.15rem' : '1rem' }} />
                       <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t("我的園子", "My Garden")}</h2>
-                      <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("主話如霖澆我田，歲歲結果到豐年。", "View your living text trees."))}</p>
+                      <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("日日澆灌讀書田，年年結果滿枝頭。", "Water your reading garden and watch it bear fruit."))}</p>
                     </div>
 
                     {/* Scripture Library */}
                     <div className="primary-button" onClick={() => setMainTab('versesets')} style={{ background: 'linear-gradient(135deg, #60a5fa, #3b82f6)', borderRadius: '16px', padding: isNarrowEditor ? '0.3rem 0.6rem' : '2.5rem 2rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center' }}>
                       <Library size={isNarrowEditor ? 46 : 72} style={{ marginBottom: isNarrowEditor ? '0.15rem' : '1rem' }} />
                       <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t('聽與說', 'Listen & Speak')}</h2>
-                      <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("經題萬卷勤溫故，句句生光照此程。", "Browse global collections and choose texts to practice."))}</p>
+                      <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("聽一聽，說一說，中英對照學得快。", "Listen, repeat, and learn with both languages side by side."))}</p>
                     </div>
 
                     {/* Multiplayer Game */}
                     <div className="primary-button" onClick={() => setMainTab('multiplayer')} style={{ background: 'linear-gradient(135deg, #f472b6, #ec4899)', borderRadius: '16px', padding: isNarrowEditor ? '0.3rem 0.6rem' : '2.5rem 2rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', textAlign: 'center' }}>
                       <Gamepad2 size={isNarrowEditor ? 46 : 72} style={{ marginBottom: isNarrowEditor ? '0.15rem' : '1rem' }} />
                       <h2 style={{ fontSize: isNarrowEditor ? '1.9rem' : '2rem', margin: 0, marginBottom: isNarrowEditor ? '0.15rem' : '0.5rem', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{t("多人遊戲", "Multiplayer")}</h2>
-                      <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("同心走過天路程，並肩玩出主榮耀。", "Play together with friends in real time."))}</p>
+                      <p style={{ ...tileCaptionStyle() }}>{splitCaption(t("同窗同樂共背誦，你來我往比高低。", "Recite together and compete with friends in real time."))}</p>
                     </div>
                   </div>
                 </div>
@@ -14418,100 +14418,53 @@ const zhcnDict = {
                 );
               })()}
 
-                            {mainTab === 'manual' && (
-                <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto', color: '#1e293b', lineHeight: '1.8' }}>
-                  <>
-                    <h1 style={{ color: '#3b82f6', marginBottom: '1.5rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}><CloudRain size={32} /> {t("VerseRain 內容雨 操作手冊", "ParagraphRain User Manual")}</h1>
-                    <p style={{ textAlign: 'center', fontSize: '1.1rem', marginBottom: '3rem' }}>
-                      <span dangerouslySetInnerHTML={{ __html: t("歡迎進入 <strong>VerseRain 內容雨</strong>！這是一個結合聆聽、挑戰與學習的互動背經平台。<br />在這裡您可以挑戰全球內容集、建立個人專屬的內容集，也能用自己的聲音把內容分享給朋友！", "Welcome to <strong>ParagraphRain</strong>! An interactive memorisation platform that combines listening, challenge and learning.<br />Here you can challenge global collections, build your own library, and share paragraphs in your own voice with friends!") }} />
-                    </p>
+              {mainTab === 'manual' && (
+                <div className="ls-manual" style={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #cbd5e1', padding: '2rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', color: '#334155', lineHeight: 1.7 }}>
+                  <h1 style={{ marginTop: 0, color: '#1e293b', fontSize: '1.6rem' }}>{t('聽&說 操作手冊', 'Listen&Speak Guide')}</h1>
+                  <p><span dangerouslySetInnerHTML={{ __html: t('歡迎使用 <strong>聽&說 Listen&Speak</strong>！這是一個把「聽、跟著說、背起來」放在一起的雙語學習平台。<br />內建《唐詩三百首》，也可以放進任何你喜歡的好文：中英對照、一段一段，還能用自己的聲音錄下來分享。', 'Welcome to <strong>Listen&Speak</strong> — a bilingual platform for listening, repeating, and memorising.<br />It ships with the 300 Tang Poems, and you can add any text you love: Chinese and English side by side, paragraph by paragraph, in your own voice.') }} /></p>
 
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Play size={22} /> {t("一、如何開始遊玩？", "1. How to Play?")}</h2>
-                    <p>{t("只需簡單三步，您就能進入背經的挑戰中！", "Just three simple steps to start your text memorization challenge!")}</p>
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('一、五種語言', '1. Five languages')}</h2>
+                  <p>{t('左上角的「版本」可以選：繁體中文、簡體中文、繁體與注音符號、簡體與羅馬拼音、English。', 'The "Version" picker at the top left offers Traditional Chinese, Simplified Chinese, Traditional with Bopomofo, Simplified with Pinyin, and English.')}</p>
+                  <ul>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>注音／拼音是語言的一種：</strong>選「繁體與注音符號」，每個字右邊會直排注音（像課本）；選「簡體與羅馬拼音」，拼音會標在字的上方。適合小朋友認字。', '<strong>Bopomofo and Pinyin are languages here:</strong> pick "Traditional with Bopomofo" and every character gets vertical Bopomofo on its right (like a schoolbook); pick "Simplified with Pinyin" and pinyin sits above each character. Great for young readers.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>第二語言：</strong>聆聽畫面下方可以選第二語言，例如主語言「繁體與注音」、第二語言「English」，每一段下面就會顯示對照的英文。', '<strong>Second language:</strong> at the bottom of the listening screen pick a second language — e.g. main "Traditional with Bopomofo", second "English" — and the matching English shows under each paragraph.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>簡體是自動轉的：</strong>作者只要輸入繁體與英文，簡體版會自動產生。', '<strong>Simplified is generated:</strong> authors type Traditional Chinese and English; the Simplified version is produced automatically.') }} /></li>
+                  </ul>
 
-                    <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("1. 從大廳進入「聽與說」", "1. Open \"Scripture Sets\" from the lobby")}</h3>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("在大廳點 <strong>「聽與說」</strong> 卡片，就會看到系統與玩家建立的所有公開內容集，可依最新、標題或最受歡迎排序。", "Tap the <strong>\"Scripture Sets\"</strong> card in the lobby to see every public verse set created by the system and by players. Sort by newest, title, or most popular.") }} /></p>
-                    <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("2. 選擇想要挑戰的內容集", "2. Select a Collection")}</h3>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("點選列表中的標題（例如：<strong>約翰福音 核心內容</strong>），進入內容集頁面，裡面列出每一段，右側有「播放」「排行榜」「挑戰」「分享」等按鈕。", "Tap a title in the list (e.g. <strong>Gospel of John Core Paragraphs</strong>) to open the set page, which lists every paragraph with Play, Leaderboard, Challenge, and Share buttons.") }} /></p>
-                    <h3 style={{ marginTop: '1.5rem', color: '#0f172a' }}>{t("3. 開始挑戰", "3. Start the Challenge")}</h3>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("點該節右側的綠色 <strong>⚡ 挑戰</strong> 鍵，選擇遊戲模式（九宮格／內容雨／語音模式）與難度，按「開始挑戰」——三秒後內容雨就傾盆而下！依正確順序點擊落下的方塊，越快完成、時間加成越高。", "Tap the green <strong>⚡ Challenge</strong> button next to a verse, choose the game mode (Square / Verse Rain / Voice Mode) and difficulty, then press \"Start Challenge\" — three seconds later the verse rain pours down! Tap the falling blocks in the right order; the faster you finish, the bigger the time bonus.") }} /></p>
-                    <ManualVideo src="/manual/start-game.mp4" poster="/manual/start-game.jpg" caption={t("教學影片：從大廳進入聽與說 → 選內容集 → ⚡ 挑戰 → 選模式 → 依序點擊方塊，完成一次挑戰。", "Tutorial: lobby → Collections → pick a set → ⚡ Challenge → choose a mode → tap the blocks in order to finish a challenge.")} />
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('二、聽一聽', '2. Listen')}</h2>
+                  <ul>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('大廳的 <strong>「好文欣賞」</strong>：每日一首，或挑一個主題集連續聆聽。', 'The <strong>Good Reads</strong> card on the home screen: a poem a day, or pick a collection and listen continuously.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('大廳的 <strong>「聽與說」</strong>：所有公開的內容集。點進一個內容集，按「播放」就能一段一段聽；「播放方式」可以設定播放時間、字體大小與聲音來源。', 'The <strong>Listen &amp; Speak</strong> card: every public collection. Open one and press Play to hear it paragraph by paragraph; "Playback mode" sets duration, font size, and the voice.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('「朗讀第二語言」會暫時把主／次語言對調，用第二語言落字並朗讀，適合練外語。', '"Read the second language" temporarily swaps the two languages — the text falls and is read in the second language. Handy for practising a foreign language.') }} /></li>
+                  </ul>
 
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Edit size={24} /> {t("二、如何自建專屬「內容集」？", "2. How to Build Your Own \"Verse Set\"")}</h2>
-                    <p>{t("只要登入帳號，任何人都可以打造自己的主日學、小組或個人靈修專屬內容集，建好就能聆聽、挑戰、分享。", "Any signed-in user can build a collection for Sunday school, a small group or personal devotion, then listen to it, challenge it and share it.")}</p>
-                    <ol style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("先<strong>登入</strong>，再從大廳點 <strong>「聽與說」</strong>，進入上方的 <strong>「我的內容集」</strong>。", "<strong>Sign in</strong>, open <strong>\"Scripture Sets\"</strong> from the lobby, then go to <strong>\"My Custom Sets\"</strong> at the top.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("點 <strong>「＋ 建立新內容集」</strong>，填上標題與簡介；也可以挑一張背景圖片、選背景音樂或上傳自己的音樂。", "Tap <strong>\"+ Create New Set\"</strong>, give it a title and a description; you can also pick a background image and background music (or upload your own).") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("在段落列表選好書卷、輸入 <strong>章:節</strong>（如 <code>3:16</code> 或 <code>6:9-13</code>），按 <strong>Enter 或 Tab</strong>，系統就會自動抓取完整內容。", "In the paragraph list pick the book, type the <strong>chapter:paragraph</strong> (e.g. <code>3:16</code> or <code>6:9-13</code>) and press <strong>Enter or Tab</strong> — the full text is fetched for you.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("內容很多？用 <strong>「輸入出處批次匯入」</strong>，一次貼上多個出處（每行一個或用逗號分隔）。逗號後面的純節數會接在同一章：<code>約翰福音 1:1, 4</code> 就是 1:1 與 1:4。", "Many verses? Use <strong>\"Import by references\"</strong> and paste several references at once (one per line or comma-separated). A bare verse number after a comma stays in the same chapter: <code>John 1:1, 4</code> means 1:1 and 1:4.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("每一節旁邊都有 🎙️ 麥克風，可以順手錄下自己的親聲朗讀。", "Each paragraph row has a 🎙️ mic so you can record your own reading right there.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("確認無誤後點 <strong>「儲存內容集」</strong>。這份內容集就會出現在「聽與說」，大家都可以聆聽與挑戰。", "When everything looks right, tap <strong>\"Save Set\"</strong>. The set appears in \"Scripture Sets\" for everyone to listen to and challenge.") }} /></li>
-                    </ol>
-                    <div style={{ backgroundColor: '#f0fdf4', borderLeft: '4px solid #22c55e', padding: '1rem', borderRadius: '4px', marginBottom: '3rem' }}>
-                      <span dangerouslySetInnerHTML={{ __html: t("<strong>提示：</strong>內容抓取串接了各語言的聖經資料庫（和合本、ESV、KJV…），能大幅省去打字與校稿的時間；建好的內容集還能用「翻譯」一鍵在地化到其他語言（見第七章）。", "<strong>Tip:</strong> Verse fetching is wired to Bible databases in every supported language (CUV, ESV, KJV…), which saves a lot of typing and proofreading; a finished set can also be localized to another language with one tap via \"Translate\" (see section 7).") }} />
-                    </div>
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('三、說一說：用自己的聲音', '3. Speak: in your own voice')}</h2>
+                  <ul>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('聆聽時按 🎙️ 麥克風，照著唸一遍並儲存，下次再聽這一段就是你的聲音。', 'While listening, tap the 🎙️ microphone, read the paragraph aloud and save — next time you hear this paragraph, it is your voice.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('任何登入的人都可以錄；「聲音」選單能切換作者、其他朋友或電腦語音。「自動」會優先播真人的聲音。', 'Anyone signed in can record; the voice menu switches between the author, other friends, or the computer voice. "Auto" prefers a real voice.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('喜歡誰的朗讀，按 <strong>「鼓勵」</strong> 留一句話或一段語音給他。', 'Like someone\'s reading? Tap <strong>Encourage</strong> to leave them a note or a voice message.') }} /></li>
+                  </ul>
 
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Mic size={22} /> {t("三、全新語音模式 (Voice Mode)", "3. New Voice Mode")}</h2>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("除了點擊方塊，您現在可以直接<strong>用「唸」的來背誦！</strong>", "Besides clicking blocks, you can now recite paragraphs directly <strong>using your voice!</strong>") }} /></p>
-                    <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>智慧模糊辨識：</strong> 系統內建強大的中文拼音模糊比對。就算有台灣國語、捲舌平舌音不分，只要發音相近就能過關！", "<strong>Smart Fuzzy Recognition:</strong> The system features powerful fuzzy pinyin matching. Even with accents or imprecise pronunciation, similar sounds will pass!") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>貼心提示系統：</strong> 如果卡詞了，系統會在 3 秒後自動給予局部提示，幫助您順利接下去。", "<strong>Helpful Hint System:</strong> If you get stuck, the system will automatically provide a partial hint after 3 seconds to help you continue.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>分數加成獎勵：</strong> 為了鼓勵大家開口宣告神的話語，在語音模式中，您的<strong>「剩餘時間加成」權重會大幅提升 50%</strong>！", "<strong>Score Bonus:</strong> To encourage proclaiming God's word out loud, your <strong>\"Remaining Time Bonus\" weight is increased by 50%</strong> in Voice Mode!") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>預備倒數：</strong>宣告段落後，畫面會出現「預備…3…2…1…開始！」的大字倒數，讓你清楚知道什麼時候輪到自己開口。", "<strong>Ready countdown:</strong> After the reference is announced, a big \"Ready… 3… 2… 1… Go!\" countdown shows on screen so you know exactly when it's your turn to speak.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>挑戰前先設定：</strong>按下「挑戰」會先跳出設定視窗，讓你選擇遊戲模式（九宮格／內容雨／語音模式）與難度。語音模式可勾選「不要複誦我背過的內容」，節奏更順暢。", "<strong>Set up before you play:</strong> Tapping \"Challenge\" opens a setup dialog where you pick the game mode (Square / Verse Rain / Voice Mode) and difficulty. In Voice Mode you can tick \"Do not repeat what I just recited\" for a faster flow.") }} /></li>
-                    </ul>
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('四、背起來：挑戰', '4. Memorise: challenges')}</h2>
+                  <ul>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('每一段旁邊的 <strong>⚡ 挑戰</strong>：選九宮格、落字雨或語音模式，把打散的詞依序點回來，或直接開口背。', 'The <strong>⚡ Challenge</strong> next to each paragraph: choose Grid, Falling Words, or Voice mode — tap the scrambled words back into order, or simply recite.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('每挑戰一段，「我的園子」就長出一棵樹；通關變大樹，創新高結果子。', 'Every challenge plants a tree in <strong>My Garden</strong>; clearing it grows the tree, and new high scores bear fruit.') }} /></li>
+                  </ul>
 
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t("⚔️ 四、多人即時連線對戰", "⚔️ 4. Multiplayer Real-time Battle")}</h2>
-                    <p>{t("背誦不再是一個人孤單的事！", "Memorizing text is no longer a solitary task!")}</p>
-                    <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("點擊上方的 <strong>「多人遊戲」</strong> 創建專屬房間，邀請小組成員或家人一起加入。", "Tap <strong>\"Multiplayer\"</strong> at the top to create a private room and invite your group members or family to join.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("房主可以從全域內容集中挑選 <strong>「比賽內容」</strong>，並選擇比賽方式：獨立九宮格、雨滴瀑布或語音模式。", "The host picks the <strong>\"Competition Verses\"</strong> from the global verse bank and chooses how to play: Solo Square, Verse Rain, or Voice Mode.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>🌍 各自用自己的語言參賽（新）：</strong>在個人賽／邀人PK 模式中，每位玩家都用自己選的聖經版本比賽——主持人用中文，朋友可以用英文 ESV 或韓文，同一段各自看到自己的語言。計分以節數與分數為準，與語言無關，完全公平。團隊競賽因為大家共用同一個盤面，維持主持人的語言。", "<strong>🌍 Everyone plays in their own language (new):</strong> In Solo / PK rooms each player competes in the Bible version they chose — the host in Chinese, a friend in English ESV or Korean — and everyone sees the same verse in their own language. Scoring is by verse count and points, independent of language, so it stays fair. Team battles share one board and therefore keep the host's language.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("所有人同時開始挑戰，並能在遊戲結束後看到即時的成績排行榜，非常適合主日學活動與小組破冰！", "Everyone starts the challenge simultaneously and can see real-time leaderboards after the game ends. Perfect for Sunday school activities and group icebreakers!") }} /></li>
-                    </ul>
-                    <ManualVideo src="/manual/multiplayer.mp4" poster="/manual/multiplayer.jpg" caption={t("教學影片：左邊是主持人（繁體中文）在內容集頁按「邀人PK」開房；右邊是朋友把版本切成 English - ESV 後輸入代碼加入。比賽開始後，同一段各自看到自己的語言。", "Tutorial: on the left the host (Traditional Chinese) opens a room with \"Invite PK\" from the set page; on the right a friend switches to English - ESV and joins with the code. Once the match starts, each sees the same verse in their own language.")} />
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('五、建立自己的內容集', '5. Create your own collection')}</h2>
+                  <ol>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('登入後從「聽與說」進入 <strong>「我的內容集」</strong>，按「建立新內容集」。', 'Sign in, open <strong>My Collections</strong> from Listen &amp; Speak, and tap "Create new collection".') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('填標題與簡介，選「原文語言」（中文或英文）。', 'Enter a title and description and choose the original language (Chinese or English).') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('每一段有 <strong>標籤、中文、English</strong> 三個欄位：中文和英文對照著輸入，翻譯由作者自己寫，不用機器翻譯。標籤留空會自動變成「第 1 段」。', 'Each paragraph has <strong>label, Chinese, English</strong>: type the two languages side by side — translations are your own, no machine translation. Leave the label blank and it becomes "Part 1".') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('文章很長？用 <strong>「貼上全文對照匯入」</strong>：左邊貼中文全文、右邊貼英文全文，空行分段，第 1 段配第 1 段。', 'Long text? Use <strong>Paste full text</strong>: Chinese on the left, English on the right, blank lines between paragraphs — paragraph 1 pairs with paragraph 1.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('每一段都可以先在編輯器裡 🎙️ 錄音。勾選「公開」再儲存，大家就能聽、挑戰與分享。', 'You can 🎙️ record each paragraph right in the editor. Tick "Public" and save so everyone can listen, challenge, and share.') }} /></li>
+                  </ol>
 
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Mic size={22} /> {t("五、親聲朗讀 — 用你自己的聲音讀經", "5. Read Aloud in Your Own Voice")}</h2>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("在<strong>聆聽內容集</strong>時，你可以錄下自己的聲音來讀某一節。之後再聽這一節，聽到的就是你自己的聲音，而不是電腦語音；還能把它分享給朋友，讓他們也聽見你的親聲。", "While <strong>listening to a verse set</strong>, you can record your own voice reading a verse. Next time you play that verse you'll hear yourself instead of the computer voice — and you can share it so friends hear your voice too.") }} /></p>
-                    <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>錄下你的親聲：</strong>（需先登入）聆聽畫面下方那排按鈕中有一顆 🎙️ 麥克風鍵，點它、照著內容唸一遍、儲存即可。", "<strong>Record your voice:</strong> (login required) In the row of buttons at the bottom of the listen screen, tap the 🎙️ mic, read the paragraph aloud, and save.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>不只作者，人人都能錄：</strong>任何登入的玩家都可以為一段錄下自己的聲音並公開分享。打開播放器的「播放方式」→「聲音來源」，就能在 自動／電腦語音／無聲音／作者錄音／其他貢獻者的聲音 之間切換，聽聽弟兄姊妹怎麼讀這一節。", "<strong>Not just the author — anyone can record:</strong> Any signed-in player can record a verse in their own voice and share it publicly. Open the player's \"Play Mode\" → \"Voice\" to switch between Auto / Computer voice / No voice / Author / other contributors' voices and hear how brothers and sisters read the verse.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>播放優先順序：</strong>「自動」會優先播你自己的親聲，其次是最新公開的人聲，再來是內容集作者的親聲，最後才是電腦語音（TTS）。只要有人錄過，就不會聽到機器音。", "<strong>Playback priority:</strong> \"Auto\" plays your own voice first, then the newest public recording, then the set author's voice, and only then the computer voice (TTS). As long as someone has recorded, you never hear a robot.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>分享你正在聽的聲音：</strong>點 🔗 分享鍵，連結會帶著「你現在正在聽的那個聲音」——不論是你自己、作者或其他貢獻者的親聲，朋友打開連結聽到的就是同一個聲音。若錄音還在上傳，分享鍵會先等上傳完成再產生連結，確保對方一定聽得到。", "<strong>Share the voice you're listening to:</strong> Tap the 🔗 share button and the link carries whichever voice you're hearing right now — yours, the author's, or another contributor's — so your friend hears exactly the same voice. If a recording is still uploading, the button waits for it to finish before creating the link.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>暫停 / 繼續：</strong>播放親聲錄音時按暫停會停在原處，再按繼續會<strong>從原處接著播</strong>，不會從頭重讀。", "<strong>Pause / Resume:</strong> When a voice recording is playing, Pause holds the position and Resume <strong>continues from where it stopped</strong> instead of restarting.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>刪除：</strong>段落下方若顯示「🎙️ 這節有你的親聲」，點旁邊的「刪除 ✕」即可移除你的錄音，之後會回到作者的親聲或電腦語音。", "<strong>Delete:</strong> If \"🎙️ Your voice on this verse\" shows under the reference, tap \"Delete ✕\" next to it to remove your recording; playback then falls back to the author's or computer voice.") }} /></li>
-                    </ul>
-                    <div style={{ backgroundColor: '#eff6ff', borderLeft: '4px solid #3b82f6', padding: '1rem', borderRadius: '4px', marginBottom: '3rem' }}>
-                      <span dangerouslySetInnerHTML={{ __html: t("<strong>小提示：</strong>聆聽畫面上方中間、顯示日期或主題名稱的按鈕，下面寫著 <strong>【更多好文】</strong> —— 點一下就能展開更多主題好文組，快速切換聆聽不同主題。", "<strong>Tip:</strong> The button at the top-center of the listen screen (showing the date or topic name) has <strong>[More topic paragraphs]</strong> underneath — tap it to open more topic collections and switch quickly.") }} />
-                    </div>
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Headphones size={22} /> {t("六、播放方式、我的最愛與更多聆聽小工具", "6. Play Mode, Favorites & More Listening Tools")}</h2>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("聆聽畫面的 <strong>「播放方式」</strong> 視窗和幾顆新按鈕，讓連續聆聽更貼近你的習慣：", "The listen screen's <strong>\"Play Mode\"</strong> dialog and a few new buttons make continuous listening fit your routine:") }} /></p>
-                    <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⏱️ 播放時間：</strong>可設定播放幾分鐘後自動停止，或無限循環播放——睡前、靈修時段都好用。", "<strong>⏱️ Duration:</strong> Set playback to stop after a number of minutes, or loop forever — handy at bedtime or during devotions.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>🔠 字體大小：</strong>同一個視窗裡可以調整聆聽畫面的字級，長輩或投影使用時把字放大更清楚。", "<strong>🔠 Font size:</strong> Adjust the text size of the listen screen in the same dialog — bigger for seniors or projection.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⭐ 我的最愛：</strong>聆聽時點播放器上的星星，或在「我的內容集」的卡片上點星星，就能把內容集加入我的最愛。清單可用「我的最愛」排序，而且會跟著帳號同步到每一台裝置；從大廳「好文欣賞」進入後，也能直接挑「我的最愛」來聽。", "<strong>⭐ Favorites:</strong> Tap the star on the player, or on a card in \"My Custom Sets\", to add a verse set to your favorites. Sort the list by \"Favorites\", and they sync with your account across all devices. Entering from the lobby's \"Verse Rain\" card, you can pick \"Favorites\" to listen right away.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>▶️ 一鍵播放：</strong>「我的內容集」每張卡片都多了「播放」鍵，不必先進入內容集就能開始連續聆聽（可選隨機或按序）。", "<strong>▶️ One-tap Play:</strong> Every card in \"My Custom Sets\" now has a \"Play\" button — start continuous listening (random or in order) without opening the set first.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>🔄 雙語對調：</strong>讀經頁的「朗讀第二語言」按鈕會暫時把主／次語言互換，改用第二語言落字並朗讀，原語言退到下方小字；離開後自動還原，練習外語聽讀很方便。", "<strong>🔄 Swap languages:</strong> The reader's \"Read the second language\" button temporarily swaps your primary and secondary languages — the verse falls and is read aloud in the second language while the original shows below in small text. It reverts when you leave; great for practicing a foreign language.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("<strong>⚡ 邊聽邊挑戰：</strong>聆聽中按 ⚡ 立刻挑戰這一節；結束後按「返回朗讀」會回到同一節並暫停等你，按播放或 ‹ › 就能接著聽下一節。", "<strong>⚡ Challenge while listening:</strong> Tap ⚡ while listening to challenge the current verse. When it ends, \"Back to reading\" returns you to the same verse, paused; press Play or ‹ › to continue.") }} /></li>
-                    </ul>
-                    <ManualVideo src="/manual/play-mode.mp4" poster="/manual/play-mode.jpg" caption={t("教學影片：在內容集頁按「播放」→ 播放方式視窗設定播放時間、字體大小、聲音來源 → 選「按序」開始連續聆聽。", "Tutorial: press \"Play\" on a set page → set duration, font size and voice source in the Play Mode dialog → choose \"In Order\" to start continuous listening.")} />
-                    <ManualVideo src="/manual/listen.mp4" poster="/manual/listen.jpg" caption={t("教學影片：大廳「好文欣賞」→ 選「每日一首」或主題好文 → 按「朗讀」做雙語對調（改用第二語言朗讀）→ 按「切換聲音」選電腦語音、無聲音或親聲。", "Tutorial: lobby \"Verse Rain\" → pick \"Daily Verse\" or a topic → press \"Read\" to swap languages (read in the second language) → \"Switch voice\" to choose computer voice, no voice, or a recorded voice.")} />
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Languages size={22} /> {t("七、內容集一鍵「翻譯」到其他語言", "7. Translate a Collection into Other Languages in One Click")}</h2>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("辛苦建好的內容集，想給說別種語言的弟兄姊妹用？現在不必重打一次。", "Built a great collection and want to share it with brothers and sisters who speak another language? No need to retype it.") }} /></p>
-                    <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("在內容集詳情頁點 <strong>「翻譯」</strong>，選擇目標語言。系統會自動翻譯標題、把每節出處換成該語言的書名，並抓取<strong>該語言官方譯本的真實內容</strong>（不是機器翻譯的內容）。", "On a verse set's page tap <strong>\"Translate\"</strong> and pick a target language. The title is translated, each reference is converted to that language's book name, and the <strong>real text from that language's official Bible translation</strong> is fetched (not machine-translated scripture).") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("預覽畫面可以修改標題、逐節查看成功／失敗並重試；確認後點 <strong>「加入並編輯」</strong>，內容集就會發佈到該語言的內容集，並自動切換過去讓你補上簡介。", "In the preview you can edit the title, see each verse's success/failure and retry; then tap <strong>\"Add & Edit\"</strong> to publish it into that language's library, and the app switches over so you can add a description.") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("VerseRain 現已支援 20 多種聖經版本與介面語言：繁／簡中文、台語、英文（KJV／ESV／NIV）、日文、韓文、西班牙文、葡萄牙文、法文、德文、俄文、印地文、阿拉伯文、波斯文、希伯來文、土耳其文、緬甸文、越南文、印尼文與馬來文——切換左上角的「版本」即可。", "VerseRain now supports 20+ Bible versions and interface languages: Traditional/Simplified Chinese, Taiwanese, English (KJV/ESV/NIV), Japanese, Korean, Spanish, Portuguese, French, German, Russian, Hindi, Arabic, Persian, Hebrew, Turkish, Burmese, Vietnamese, Indonesian and Malay — just switch \"Version\" at the top left.") }} /></li>
-                    </ul>
-                    <ManualVideo src="/manual/translate.mp4" poster="/manual/translate.jpg" caption={t("教學影片：在內容集頁按「翻譯」→ 選 Bahasa Melayu → 系統翻譯標題並抓取馬來文譯本 → 預覽 16 節全部成功 → 「加入並編輯」。", "Tutorial: press \"Translate\" on a set page → choose Bahasa Melayu → the title is translated and the Malay Bible text fetched → preview shows all 16 verses → \"Add & Edit\".")} />
-                    <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Map size={22} /> {t("八、全球玩家地圖（2D／3D）", "8. Global Player Map (2D / 3D)")}</h2>
-                    <p><span dangerouslySetInnerHTML={{ __html: t("點上方的 <strong>「誰在玩」</strong> 頁籤，看看世界各地的內容雨玩家都在哪裡。", "Tap the <strong>\"Who's Playing\"</strong> tab at the top to see where VerseRain players are around the world.") }} /></p>
-                    <ul style={{ paddingLeft: '1.5rem', marginBottom: '2rem' }}>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("點擊標記可以查看該玩家的成績；地圖上若有進行中的多人遊戲房間，<strong>雙擊房間就能直接加入戰局</strong>！", "Click a marker to see that player's scores; if a multiplayer room is open on the map, <strong>double-click it to jump straight into the battle</strong>!") }} /></li>
-                      <li><span dangerouslySetInnerHTML={{ __html: t("右上角可在 <strong>「2D 地圖」</strong> 與 <strong>「3D 地球」</strong> 之間切換，轉動地球，看看全球背經的即時脈動。", "Switch between <strong>\"2D Map\"</strong> and <strong>\"3D Globe\"</strong> at the top right, spin the globe, and watch scripture memorization pulse around the world in real time.") }} /></li>
-                    </ul>
-                    <ManualVideo src="/manual/map.mp4" poster="/manual/map.jpg" caption={t("教學影片：點「誰在玩」看全球玩家分佈 → 按「3D 地球」→ 拖曳轉動地球。", "Tutorial: open \"Who's Playing\" to see players worldwide → press \"3D Globe\" → drag to spin the globe.")} />
-                  </>
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('六、多人遊戲與誰在玩', '6. Multiplayer and Who\'s Playing')}</h2>
+                  <ul>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>多人遊戲</strong>：開一個房間邀請家人或同學，每個人用自己的語言（含注音／拼音）看同一段，一起比賽。', '<strong>Multiplayer</strong>: open a room for family or classmates; everyone sees the same paragraph in their own language (Bopomofo and Pinyin included) and competes together.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>誰在玩</strong>：看看世界各地正在練習的人；點標記看成績，雙擊進行中的房間可直接加入。', '<strong>Who\'s Playing</strong>: see who is practising around the world; click a marker for scores, double-click an open room to join.') }} /></li>
+                  </ul>
                 </div>
               )}
 
