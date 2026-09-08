@@ -1,3 +1,4 @@
+import { PARTY_DB } from './lib/partyHost.js';
 import { useEffect, useRef, useState } from 'react';
 
 // Same deterministic room color as in App.jsx
@@ -82,7 +83,7 @@ function loadLeafletAndCluster() {
   });
 }
 
-const TEAMS_HOST = 'https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db';
+const TEAMS_HOST = PARTY_DB;
 
 export default function WorldMap2D({ t, playerName, userEmail, onJoinRoom, onViewGarden, onToggleMode, currentMode, focusLocation, playTone, playWelcome, onEnableAudio }) {
   const mapRef = useRef(null);

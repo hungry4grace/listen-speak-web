@@ -12,6 +12,7 @@ import { splitVersePhrases } from './lib/phraseSplitter.js';
 import { stripBollsMarkup, stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
 import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor } from './lib/lang.js';
+import { localizeSet, itemZh, itemEn, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
 import './index.css';
 import { BIBLE_BOOKS, getBookAbbr, getBookFullName } from './bibleDictionary';
 import I18N_FILLINS from './i18nFillins';
@@ -194,7 +195,7 @@ function BindInviterModal({ t, personalCode, userEmail, setMyInviterCode, setToa
     localStorage.removeItem('verserain_invite_claimed');
     setMyInviterCode(code);
     if (userEmail) {
-      fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/bind-inviter", {
+      fetch(`${PARTY_DB}/bind-inviter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: userEmail, inviter: code }),
@@ -592,6 +593,7 @@ function ManualVideo({ src, poster, caption }) {
 }
 
 const SUPPORTED_UI_LANGS = ['zh', 'cuvs', 'en'];
+import { PARTY_ORIGIN, PARTY_WS_HOST, PARTY_DB } from './lib/partyHost.js';
 
 // Document title per UI language — index.html ships the zh title, so without
 // this the browser tab stays Chinese for everyone (including recipients of a
@@ -1462,7 +1464,7 @@ async function fetchVerseFromTaibible(normalizedKey) {
   const chapter = parseInt(colonIdx >= 0 ? chapterVerse.slice(0, colonIdx) : chapterVerse, 10);
   if (Number.isNaN(chapter)) return null;
   try {
-    const res = await fetch(`https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/taibible?book=${bookId}&chapter=${chapter}`);
+    const res = await fetch(`${PARTY_DB}/taibible?book=${bookId}&chapter=${chapter}`);
     if (!res.ok) return null;
     const data = await res.json();
     const chap = data?.verses || {};
@@ -1533,6 +1535,9 @@ async function fetchEditorVerseText({ bookInfo, sanitized, version }) {
 function isTextLikelyForVersion(text, version) {
   if (!text) return false;
   const s = String(text);
+  const bl = baseLang(version);
+  if (bl === 'en') return /[A-Za-z]/.test(s);
+  if (bl === 'cuv' || bl === 'cuvs') return /[一-鿿]/.test(s);
   switch (String(version || '').toLowerCase()) {
     case 'he':
       // Must contain Hebrew letters
@@ -3051,9 +3056,8 @@ function VerseSetContinuousRainPlayer({
       return;
     }
 
-    let cancelled = false;
     const normalizedKey = normalizeVerseReferenceKey(currentVerse.reference);
-    if (!normalizedKey) return;
+    if (!normalizedKey) { setLookedUpText(''); setLookedUpRef(''); return; }
 
     // 1) Search all loaded verse sets in the secondary language (instant, real Bible text).
     //    Validate that the text is actually in the expected script — verse sets sometimes contain
@@ -3075,36 +3079,9 @@ function VerseSetContinuousRainPlayer({
       return;
     }
 
-    // 3) Fetch from external Bible API — ESV/KJV via dedicated endpoints,
-    //    all other languages via bolls.life free API (real Bible text, not translation)
+    // 3) Nothing else to try — 聽&說 items carry their own second language.
     setLookedUpText('');
     setLookedUpRef('');
-    const englishRef = getEnglishReferenceFromKey(normalizedKey);
-
-    (async () => {
-      let text = null;
-      let ref = englishRef || currentVerse.reference;
-
-      if (secondaryVersion === 'esv' || secondaryVersion === 'kjv' || secondaryVersion === 'niv') {
-        if (englishRef) text = await fetchBibleVerseFromAPI(englishRef, secondaryVersion);
-      } else if (secondaryVersion === 'tr' || secondaryVersion === 'my') {
-        // bolls.life doesn't carry Turkish or Myanmar/Burmese; use the
-        // getbible.net Kutsal Kitap / Judson editions instead. Same input
-        // shape (normalizedKey) and output shape (joined verse text).
-        text = await fetchVerseFromGetBible(normalizedKey, secondaryVersion);
-      } else if (secondaryVersion === 'tw') {
-        // 台語漢字本 — served by our own PartyKit proxy.
-        text = await fetchVerseFromTaibible(normalizedKey);
-      } else {
-        text = await fetchVerseFromBolls(normalizedKey, secondaryVersion);
-      }
-
-      if (cancelled || !text) return;
-      setCachedBibleVerse(secondaryVersion, normalizedKey, text);
-      setLookedUpText(text);
-      setLookedUpRef(ref);
-    })();
-
     return () => { cancelled = true; };
   }, [currentVerse, secondaryVerse, secondaryVersion, secondaryVerseByRef]);
 
@@ -5005,6 +4982,8 @@ const ENGLISH_BOOK_LOCALIZATION_MAP = {
 };
 
 function formatVerseReferenceForDisplay(ref, version) {
+  // 聽&說 labels (第 1 段, Part 1, 靜夜思 · 李白 …) are not scripture references — show them as-is.
+  if (!ref || !parseScriptureKey(String(ref))?.bookId) return String(ref || '');
   // Chinese: expand abbreviation to full book name
   if (version === 'cuv' || version === 'zh' || version === 'cuvs') {
     const match = ref.match(/(.+?)\s*(\d+)(?:\s*:\s*([\d,\s\-–]+))?/);
@@ -5083,6 +5062,8 @@ function humanizeChineseReferencesForSpeech(text) {
 }
 
 function formatVerseReferenceForSpeech(ref, version) {
+  // 聽&說 labels (第 1 段, Part 1, 靜夜思 · 李白 …) are not scripture references — show them as-is.
+  if (!ref || !parseScriptureKey(String(ref))?.bookId) return String(ref || '');
   const match = ref.match(/(.+?)\s*(\d+)(?:\s*:\s*([\d,\s\-–]+))?/);
   if (!match) return ref;
   const book = match[1].trim();
@@ -5148,31 +5129,9 @@ function formatVerseReferenceForSpeech(ref, version) {
   }
 }
 
-const parseVerseRef = (v) => {
-  if (v.book && v.verseInput) {
-    const fixedVerseInput = String(v.verseInput).replace(/^\s*alm\s+/i, '').trim();
-    if (fixedVerseInput !== v.verseInput) {
-      return { ...v, verseInput: fixedVerseInput };
-    }
-    return v;
-  }
-  if (!v.reference) return v;
-  // Resolve book + chapter:verse via the app's full reference normalizer. It
-  // knows EVERY language's book names — including full names the abbrev table
-  // lacks (German "Sprüche"/"1. Mose"/"Matthäus", etc.) — and splits on the real
-  // chapter boundary. A naive startsWith over abbreviations mis-parsed those:
-  // abbrev "Spr" sliced "Sprüche 10:11" into the garbage "üche 10:11", and full
-  // names with no matching abbrev fell back to raw text ("missed book").
-  const parsed = parseScriptureKey(v.reference);
-  if (parsed && parsed.bookId) {
-    return {
-      ...v,
-      book: parsed.bookId,
-      verseInput: parsed.verses ? `${parsed.chapter}:${parsed.verses}` : `${parsed.chapter}`,
-    };
-  }
-  return v;
-};
+// Rows opened in the editor: label + both language sides. (Kept under the
+// old name because every "edit this set" entry point calls it.)
+const parseVerseRef = (v) => ({ reference: String(v?.reference || ''), text: itemZh(v), textEn: itemEn(v), ...(v?.textCn ? { textCn: v.textCn } : {}) });
 
 // --- Activity Heatmap Component ---
 const ActivityHeatmap = ({ t, activityMap = {} }) => {
@@ -5315,7 +5274,7 @@ const ActivityHeatmap = ({ t, activityMap = {} }) => {
   );
 };
 
-const PARTY_HOST = "https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db";
+const PARTY_HOST = PARTY_DB;
 
 async function fetchRetry(url, opts = {}, { retries = 2, delay = 1500 } = {}) {
   for (let i = 0; i <= retries; i++) {
@@ -5339,6 +5298,20 @@ export default function App() {
   });
 
   const [version, setVersion] = useState(() => localStorage.getItem('verseRain_version') || 'cuv');
+  // Simplified Chinese is derived from the Traditional side; load the
+  // converter lazily the first time a Simplified variant is active (or an
+  // editor save needs it) and re-render once it is ready.
+  const [simplifiedReady, setSimplifiedReady] = useState(hasSimplifiedConverter());
+  useEffect(() => {
+    if (simplifiedReady || baseLang(version) !== 'cuvs') return;
+    let alive = true;
+    import('opencc-js').then((m) => {
+      if (!alive) return;
+      setSimplifiedConverter(m.Converter({ from: 'tw', to: 'cn' }));
+      setSimplifiedReady(true);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [version, simplifiedReady]);
   const [bilingualSecondaryVersion, setBilingualSecondaryVersion] = useState(() => localStorage.getItem('verseRain_bilingualSecondaryVersion') || 'kjv');
   useEffect(() => {
     localStorage.setItem('verseRain_version', version);
@@ -5636,7 +5609,7 @@ export default function App() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Taipei';
-      const res = await fetch('https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/save-push-subscription', {
+      const res = await fetch(`${PARTY_DB}/save-push-subscription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5671,7 +5644,7 @@ export default function App() {
       if (sub) {
         await sub.unsubscribe();
       }
-      await fetch('https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/delete-push-subscription', {
+      await fetch(`${PARTY_DB}/delete-push-subscription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerName: playerName || 'Anonymous' }),
@@ -5807,7 +5780,7 @@ export default function App() {
       }
     };
 
-    fetch(`https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/garden?player=${encodeURIComponent(playerName)}`)
+    fetch(`${PARTY_DB}/garden?player=${encodeURIComponent(playerName)}`)
       .then(classifyGardenResponse)
       .then((classification) => applyDecision(decideGardenSync(classification, localGd)))
       .catch(() => {
@@ -5888,7 +5861,7 @@ export default function App() {
     if (!playerName) return;
     privateSetsInitialSyncDoneRef.current = false;
     let cancelled = false;
-    const host = "https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db";
+    const host = PARTY_DB;
     (async () => {
       try {
         const res = await fetch(`${host}/private-sets?player=${encodeURIComponent(playerName)}`);
@@ -6199,57 +6172,17 @@ export default function App() {
   };
 
   const runBulkImport = async () => {
-    const raw = bulkImportState?.text || '';
-    // Split on newlines AND commas (ASCII "," + full-width "，" + enumeration
-    // "、") so references can be pasted one-per-line or comma-separated.
-    // 逗號也用來接同一章的其他節：「約翰福音 1:1, 4」→ 1:1 與 1:4；「…, 2:7」→ 同書卷 2:7。
-    const lines = expandSameChapterRefs(
-      raw.split(/[\n,，、]+/).map(l => l.trim()).filter(Boolean),
-      (tok) => { const m = matchBookInLine(tok); return m ? { name: m.name, rest: m.rest } : null; },
-    );
-    if (!lines.length) return;
-    setBulkImportState(s => ({ ...s, busy: true, progress: `0 / ${lines.length}`, failed: [] }));
-    const imported = [];
-    const failed = [];
-    for (let li = 0; li < lines.length; li++) {
-      const line = lines[li];
-      const m = matchBookInLine(line);
-      if (!m) {
-        failed.push(line);
-      } else {
-        const sanitized = normalizeVerseInput(m.rest);
-        // Keep the book name the user actually typed (e.g. "Salmos") so the
-        // stored reference matches the set's language instead of a zh/abbr form.
-        const refStr = `${m.name} ${sanitized}`;
-        // Retry once on a miss — the per-verse fetch occasionally drops a
-        // request (transient network / API hiccup) that a second try clears.
-        let text = await fetchVerseTextByBook(m.bookInfo, sanitized);
-        if (!text) {
-          await new Promise(r => setTimeout(r, 500));
-          text = await fetchVerseTextByBook(m.bookInfo, sanitized);
-        }
-        if (text) {
-          imported.push({ book: m.bookInfo.id, verseInput: sanitized, reference: refStr, text });
-        } else {
-          failed.push(line);
-        }
-      }
-      setBulkImportState(s => (s ? { ...s, progress: `${li + 1} / ${lines.length}` } : s));
-    }
-    if (imported.length) {
-      setEditingCustomSet(prev => ({
-        ...prev,
-        // Drop untouched blank rows, then append the imported verses.
-        verses: [...prev.verses.filter(v => v.reference || v.text), ...imported],
-      }));
-    }
-    if (failed.length) {
-      setBulkImportState(s => (s ? { ...s, busy: false, failed } : s));
-    } else {
-      setBulkImportState(null);
-      setToast(t('已匯入 {n} 節經文 ✓', `Imported {n} verse${imported.length === 1 ? '' : 's'} ✓`).replace('{n}', String(imported.length)));
-      setTimeout(() => setToast(null), 3500);
-    }
+    const zh = splitParagraphs(bulkImportState?.zh);
+    const en = splitParagraphs(bulkImportState?.en);
+    const n = Math.max(zh.length, en.length);
+    if (!n) return;
+    const imported = Array.from({ length: n }, (_, i) => ({ reference: '', text: zh[i] || '', textEn: en[i] || '' }));
+    setEditingCustomSet(prev => ({
+      ...prev,
+      // Drop untouched blank rows, then append the imported paragraphs.
+      verses: [...prev.verses.filter(v => v.reference || v.text || v.textEn), ...imported],
+    }));
+    setBulkImportState(null);
   };
 
   // 題庫創作者親聲朗讀 — recordings for the set being edited, keyed by
@@ -6454,7 +6387,7 @@ export default function App() {
     setViewingPlayerGarden({ playerName: name, gardenData: null, loading: true });
     try {
       const [gardenRes, pointsRes] = await Promise.all([
-        fetch(`https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/garden?player=${encodeURIComponent(name)}`),
+        fetch(`${PARTY_DB}/garden?player=${encodeURIComponent(name)}`),
         fetch(`/api/get-creator-points?author=${encodeURIComponent(name)}`).catch(() => null)
       ]);
       const data = await gardenRes.json();
@@ -6481,7 +6414,7 @@ export default function App() {
     if (!showLevelInfo) return;
     // Fetch fresh data every time the modal opens
     Promise.all([
-      fetch('https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/all-gardens')
+      fetch(`${PARTY_DB}/all-gardens`)
         .then(r => r.ok ? r.json() : { fruitsMap: {} }).catch(() => ({ fruitsMap: {} })),
       fetch('/api/get-all-scores')
         .then(r => r.ok ? r.json() : { bonusFruitsMap: {} }).catch(() => ({ bonusFruitsMap: {} }))
@@ -6642,7 +6575,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets")
+    fetch(`${PARTY_DB}/custom-sets`)
       .then(res => res.json())
       .then(data => {
         if (!Array.isArray(data)) return;
@@ -6664,7 +6597,7 @@ export default function App() {
       })
       .catch(err => console.error("Failed to fetch published sets", err));
 
-    fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets/view")
+    fetch(`${PARTY_DB}/custom-sets/view`)
       .then(res => res.json())
       .then(data => {
         if (data) {
@@ -6680,8 +6613,7 @@ export default function App() {
   const activeVerseSets = React.useMemo(() => {
     const merged = [];
     customVerseSets.forEach(cs => {
-      const csLang = cs.language || 'cuv';
-      if (csLang === version) {
+      {
         const pub = publishedVerseSets.find(p => p.id === cs.id);
         if (pub) {
           const tPub = Date.parse(pub.lastEditedAt || '') || 0;
@@ -6702,16 +6634,15 @@ export default function App() {
       }
     });
     publishedVerseSets.forEach(ps => {
-      const psLang = ps.language || 'cuv';
-      if (psLang === version) {
+      {
         if (!merged.some(cs => cs.id === ps.id)) {
           merged.push(ps);
         }
       }
     });
     const filteredBase = baseVerseSets.filter(bs => !merged.some(m => m.id === bs.id) && !hiddenOfficialSetIds.includes(bs.id));
-    return [...filteredBase, ...merged].map(set => localizeOfficialTopicSetTitle(set, version));
-  }, [customVerseSets, publishedVerseSets, baseVerseSets, playerName, version, hiddenOfficialSetIds]);
+    return [...filteredBase, ...merged].map(set => localizeSet(localizeOfficialTopicSetTitle(set, version), version));
+  }, [customVerseSets, publishedVerseSets, baseVerseSets, playerName, version, hiddenOfficialSetIds, simplifiedReady]);
 
   // Pick a random verse from the "rain-verses" set for the homepage subtitle
   const [rainVerseIndex, setRainVerseIndex] = React.useState(() => Math.floor(Math.random() * 10000));
@@ -6746,7 +6677,8 @@ export default function App() {
   }, [bilingualSecondaryVersion, getSetsForVersion]);
 
   const findSecondarySetForPrimarySet = React.useCallback((primarySet) => {
-    if (!primarySet || !bilingualSecondaryVersion || bilingualSecondaryVersion === version) return null;
+    if (!primarySet || !bilingualSecondaryVersion || baseLang(bilingualSecondaryVersion) === baseLang(version)) return null;
+    if ((primarySet.verses || []).some(isBilingualItem)) return localizeSet(primarySet, bilingualSecondaryVersion);
     const secondarySets = getSetsForVersion(bilingualSecondaryVersion);
     if (!secondarySets.length) return null;
     const primaryId = primarySet.id || '';
@@ -7535,7 +7467,7 @@ export default function App() {
     let set = activeVerseSets.find(s => s.id === setId) || customVerseSets.find(s => s.id === setId);
     if (!set) {
       try {
-        const r = await fetch(`https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/share-set?id=${encodeURIComponent(setId)}`);
+        const r = await fetch(`${PARTY_DB}/share-set?id=${encodeURIComponent(setId)}`);
         if (r.ok) {
           const data = await r.json();
           if (data?.set?.verses?.length) set = data.set;
@@ -7662,7 +7594,7 @@ export default function App() {
     Promise.all([
       fetch('/api/get-all-scores').then(res => res.ok ? res.json() : {}).catch(() => ({})),
       fetch('/api/get-top-verses').then(res => res.ok ? res.json() : {}).catch(() => ({})),
-      fetch('https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/all-gardens').then(r => r.ok ? r.json() : { fruitsMap: {} }).catch(() => ({ fruitsMap: {} }))
+      fetch(`${PARTY_DB}/all-gardens`).then(r => r.ok ? r.json() : { fruitsMap: {} }).catch(() => ({ fruitsMap: {} }))
     ])
       .then(([scoresData, versesData, gardensData]) => {
         const parsed = scoresData && Array.isArray(scoresData.alltime) ? scoresData : { alltime: Array.isArray(scoresData) ? scoresData : [], monthly: [], daily: [] };
@@ -7714,7 +7646,7 @@ export default function App() {
     setAuthError("");
     setAuthLoading(true);
     try {
-      const host = "https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db";
+      const host = PARTY_DB;
       // Forward the referral code from localStorage so the backend can bind
       // the inviter to this account — see [App.jsx:5060] reward flow.
       const inviter = localStorage.getItem('verserain_inviter') || undefined;
@@ -8428,7 +8360,7 @@ export default function App() {
     }
 
     const socket = new PartySocket({
-      host: "listenspeak-party.hungry4grace.partykit.dev", // Production Cloudflare Worker URL
+      host: PARTY_WS_HOST,
       room: targetRoom,
       query: socketQuery
     });
@@ -8820,7 +8752,7 @@ export default function App() {
         // once the responses come back. Guarded by a Set so we only fire each
         // remote lookup once per set id.
         listenSetFetchAttemptedRef.current.add(listenSetRef);
-        const host = "https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db";
+        const host = PARTY_DB;
         fetch(`${host}/custom-sets`)
           .then(r => r.ok ? r.json() : null)
           .then(arr => { if (Array.isArray(arr)) setPublishedVerseSets(arr); })
@@ -8873,7 +8805,7 @@ export default function App() {
         // history.replaceState here, otherwise the second pass loses the
         // viewSet param and falls through to the home page.
         viewSetFetchAttemptedRef.current.add(viewSetRef);
-        const host = "https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db";
+        const host = PARTY_DB;
         fetch(`${host}/custom-sets`)
           .then(r => r.ok ? r.json() : null)
           .then(arr => { if (Array.isArray(arr)) setPublishedVerseSets(arr); })
@@ -9279,7 +9211,7 @@ export default function App() {
     // endpoint resolves the set title + verse text server-side from
     // /share-set, so those pushes pass force=true for built-ins too.
     if (!force && !set.id.startsWith('custom-')) return;
-    fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/share-set", {
+    fetch(`${PARTY_DB}/share-set`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ set }),
@@ -11498,6 +11430,17 @@ const zhcnDict = {
                             <input type="text" value={editingCustomSet.title} onChange={e => setEditingCustomSet({ ...editingCustomSet, title: e.target.value })} style={{ width: '100%', padding: '0.8rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1rem' }} placeholder={t("例如：約翰福音核心經文", "e.g., Core Verses of John")} />
                           </div>
 
+                          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 'bold', color: '#475569' }}>{t("原文語言", "Original language")}</span>
+                            {[['zh', t('中文（英文是譯文）', 'Chinese (English is the translation)')], ['en', t('英文（中文是譯文）', 'English (Chinese is the translation)')]].map(([val, label]) => (
+                              <label key={val} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', color: '#334155' }}>
+                                <input type="radio" name="sourceLang" value={val} checked={(editingCustomSet.sourceLang || 'zh') === val}
+                                  onChange={() => setEditingCustomSet({ ...editingCustomSet, sourceLang: val })} />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+
                           <div style={{ marginBottom: '1rem' }}>
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#475569' }}>{t("簡介", "Description")}</label>
                             <div style={{ background: '#fff', color: '#0f172a', borderRadius: '6px', border: '1px solid #cbd5e1', overflow: 'visible' }}>
@@ -11607,54 +11550,6 @@ const zhcnDict = {
                             <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '0.5rem', color: '#475569' }}>{t("經文列表", "Verses")}</label>
 
                             {editingCustomSet.verses.map((v, idx) => {
-                              const autoFetchVerse = async (bookInfo, verseInput, verseIdx) => {
-                                if (!bookInfo || !verseInput) return;
-                                const sanitized = normalizeVerseInput(verseInput);
-                                if (!/^\d/.test(sanitized)) return;
-                                const bookAbbr = getBookAbbr(bookInfo, version);
-                                const refStr = `${bookAbbr} ${sanitized}`;
-                                setEditingCustomSet(prev => {
-                                  const nv = [...prev.verses];
-                                  nv[verseIdx] = { ...nv[verseIdx], reference: refStr, book: bookInfo.id, verseInput: sanitized };
-                                  return { ...prev, verses: nv };
-                                });
-                                const db = loadedLangs[version]?.verses || [];
-                                const sanitizeRef = (str) => str.toString().replace(/\s+/g, '').replace(/[–—~]/g, '-').replace(/[：]/g, ':').toLowerCase();
-                                const searchRef = sanitizeRef(refStr);
-                                let foundText = '';
-                                for (const verse of db) {
-                                  if (!verse.reference) continue;
-                                  const dbRef = sanitizeRef(verse.reference);
-                                  if (dbRef === searchRef) { foundText = verse.text; break; }
-                                  const sNum = searchRef.match(/\d+.*$/);
-                                  const dNum = dbRef.match(/\d+.*$/);
-                                  if (sNum && dNum && sNum[0] === dNum[0]) {
-                                    const dBk = dbRef.replace(dNum[0], '');
-                                    const validNames = [...bookInfo.names, bookInfo.ja, bookInfo.ko].filter(Boolean).map(n => sanitizeRef(n));
-                                    if (validNames.includes(dBk)) {
-                                      foundText = verse.text;
-                                      break;
-                                    }
-                                  }
-                                }
-                                if (foundText) {
-                                  setEditingCustomSet(prev => {
-                                    const nv = [...prev.verses]; nv[verseIdx] = { ...nv[verseIdx], text: foundText }; return { ...prev, verses: nv };
-                                  });
-                                  return;
-                                }
-                                try {
-                                  // Language-aware fetch — English APIs, or bolls/getbible
-                                  // with the correct per-language slug (never a Chinese
-                                  // stand-in for a Spanish/Korean/etc. set).
-                                  const combined = await fetchEditorVerseText({ bookInfo, sanitized, version });
-                                  if (!combined) throw new Error("No verses");
-                                  setEditingCustomSet(prev => {
-                                    const nv = [...prev.verses]; nv[verseIdx] = { ...nv[verseIdx], text: combined }; return { ...prev, verses: nv };
-                                  });
-                                } catch (e) { /* user can fill manually */ }
-                              };
-
                               const moveVerse = (fromIdx, direction) => {
                                 const toIdx = fromIdx + direction;
                                 if (toIdx < 0 || toIdx >= editingCustomSet.verses.length) return;
@@ -11662,104 +11557,58 @@ const zhcnDict = {
                                 [newVerses[fromIdx], newVerses[toIdx]] = [newVerses[toIdx], newVerses[fromIdx]];
                                 setEditingCustomSet({ ...editingCustomSet, verses: newVerses });
                               };
+                              const patchRow = (patch) => {
+                                const newVerses = [...editingCustomSet.verses];
+                                newVerses[idx] = { ...newVerses[idx], ...patch };
+                                setEditingCustomSet({ ...editingCustomSet, verses: newVerses });
+                              };
+                              const enFirst = editingCustomSet.sourceLang === 'en';
+                              const zhBox = (
+                                <textarea
+                                  key="zh"
+                                  value={v.text || ''}
+                                  onChange={e => patchRow({ text: e.target.value, textCn: undefined })}
+                                  placeholder={t('中文（繁體；簡體會自動轉換）', 'Chinese (Traditional; Simplified is generated)')}
+                                  lang="zh-Hant"
+                                  style={{ flex: 1, minWidth: 0, padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', minHeight: isNarrowEditor ? '90px' : '64px', resize: 'vertical', fontSize: '0.95rem', background: '#fff', color: '#0f172a' }}
+                                />
+                              );
+                              const enBox = (
+                                <textarea
+                                  key="en"
+                                  value={v.textEn || ''}
+                                  onChange={e => patchRow({ textEn: e.target.value })}
+                                  placeholder={t('English（作者自己的翻譯）', 'English (your own translation)')}
+                                  lang="en"
+                                  style={{ flex: 1, minWidth: 0, padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', minHeight: isNarrowEditor ? '90px' : '64px', resize: 'vertical', fontSize: '0.95rem', background: '#fff', color: '#0f172a' }}
+                                />
+                              );
 
                               return (
                                 <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.8rem', alignItems: 'flex-start', position: 'relative' }}>
-                                  {/* Move column: reorder this verse up/down within the list. */}
+                                  {/* Move column: reorder this paragraph up/down within the list. */}
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }}>
                                     <button type="button" disabled={idx === 0} onClick={() => moveVerse(idx, -1)}
                                       title={t('往上移', 'Move up')}
-                                      style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: idx === 0 ? '#f1f5f9' : '#fff', color: idx === 0 ? '#cbd5e1' : '#475569', cursor: idx === 0 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: idx === 0 ? '#f1f5f9' : '#fff', color: idx === 0 ? '#cbd5e1' : '#475569', cursor: idx === 0 ? 'default' : 'pointer' }}>
                                       <ChevronUp size={16} />
                                     </button>
                                     <button type="button" disabled={idx === editingCustomSet.verses.length - 1} onClick={() => moveVerse(idx, 1)}
                                       title={t('往下移', 'Move down')}
-                                      style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: idx === editingCustomSet.verses.length - 1 ? '#f1f5f9' : '#fff', color: idx === editingCustomSet.verses.length - 1 ? '#cbd5e1' : '#475569', cursor: idx === editingCustomSet.verses.length - 1 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      style={{ padding: '0.25rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: idx === editingCustomSet.verses.length - 1 ? '#f1f5f9' : '#fff', color: idx === editingCustomSet.verses.length - 1 ? '#cbd5e1' : '#475569', cursor: idx === editingCustomSet.verses.length - 1 ? 'default' : 'pointer' }}>
                                       <ChevronDown size={16} />
                                     </button>
                                   </div>
-                                  {/* Reference column: book name on top, chapter:verse below (stacked on phones). */}
-                                  <div style={{ display: 'flex', flexDirection: isNarrowEditor ? 'column' : 'row', gap: isNarrowEditor ? '4px' : '0.5rem', alignItems: isNarrowEditor ? 'stretch' : 'flex-start', flexShrink: 0 }}>
-                                  <button type="button" onClick={() => setBookPickerIdx(bookPickerIdx === idx ? null : idx)}
-                                    style={{ padding: '0.5rem 0.7rem', borderRadius: '4px', border: '1px solid #cbd5e1', background: v.book ? '#3b82f6' : '#f1f5f9', color: v.book ? '#fff' : '#475569', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', whiteSpace: 'nowrap', minWidth: '50px', textAlign: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }}>
-                                    {v.book ? getBookAbbr(BIBLE_BOOKS.find(b => b.id === v.book), version) : <Library size={16} />}
-                                  </button>
-
-                                  {bookPickerIdx === idx && (
-                                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#1e293b', borderRadius: '8px', padding: '0.8rem', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', width: '320px', maxHeight: '400px', overflowY: 'auto' }}>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                        <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Library size={16} /> {t("選擇書卷", "Books")}</span>
-                                        <button type="button" onClick={() => setBookPickerIdx(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontWeight: 'bold' }}>{t("取消", "Cancel")}</button>
-                                      </div>
-                                      <div style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.85rem', padding: '0.3rem 0', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.3rem' }}>{t("舊約", "Old Testament")}</div>
-                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', marginBottom: '0.5rem' }}>
-                                        {BIBLE_BOOKS.filter(b => b.testament === 'OT').map(book => (
-                                          <button key={book.id} type="button" onClick={() => {
-                                            const newVerses = [...editingCustomSet.verses];
-                                            newVerses[idx] = { ...newVerses[idx], book: book.id, reference: '' };
-                                            setEditingCustomSet({ ...editingCustomSet, verses: newVerses });
-                                            setBookPickerIdx(null);
-                                          }} style={{ padding: '0.35rem 0.5rem', borderRadius: '3px', border: 'none', background: v.book === book.id ? '#10b981' : 'rgba(255,255,255,0.08)', color: v.book === book.id ? '#fff' : '#e2e8f0', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', minWidth: '42px' }}>
-                                            {getBookAbbr(book, version)}
-                                          </button>
-                                        ))}
-                                      </div>
-                                      <div style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '0.85rem', padding: '0.3rem 0', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '0.3rem' }}>{t("新約", "New Testament")}</div>
-                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
-                                        {BIBLE_BOOKS.filter(b => b.testament === 'NT').map(book => (
-                                          <button key={book.id} type="button" onClick={() => {
-                                            const newVerses = [...editingCustomSet.verses];
-                                            newVerses[idx] = { ...newVerses[idx], book: book.id, reference: '' };
-                                            setEditingCustomSet({ ...editingCustomSet, verses: newVerses });
-                                            setBookPickerIdx(null);
-                                          }} style={{ padding: '0.35rem 0.5rem', borderRadius: '3px', border: 'none', background: v.book === book.id ? '#10b981' : 'rgba(255,255,255,0.08)', color: v.book === book.id ? '#fff' : '#e2e8f0', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', minWidth: '42px' }}>
-                                            {getBookAbbr(book, version)}
-                                          </button>
-                                        ))}
-                                      </div>
+                                  {/* Label + the two language sides, paragraph by paragraph. */}
+                                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                    <input type="text" value={v.reference || ''} onChange={e => patchRow({ reference: e.target.value })}
+                                      placeholder={defaultLabel(idx, editingCustomSet.sourceLang)}
+                                      title={t('這一段的標籤（例如「第 1 段」或「靜夜思 · 李白」）。錄音與留言都掛在這個標籤上，同一集內不可重複。', 'Label for this paragraph (e.g. "Part 1" or "Quiet Night Thoughts · Li Bai"). Recordings and comments hang on it; keep it unique within the set.')}
+                                      style={{ width: isNarrowEditor ? '100%' : '260px', maxWidth: '100%', boxSizing: 'border-box', padding: '0.4rem 0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.88rem', fontWeight: 600, color: '#334155', background: '#f8fafc' }} />
+                                    <div style={{ display: 'flex', flexDirection: isNarrowEditor ? 'column' : 'row', gap: '0.5rem' }}>
+                                      {enFirst ? [enBox, zhBox] : [zhBox, enBox]}
                                     </div>
-                                  )}
-
-                                  <input type="text" value={v.verseInput !== undefined ? v.verseInput : (v.reference || '')} onChange={e => {
-                                    const newVerses = [...editingCustomSet.verses];
-                                    const bookInfo = v.book ? BIBLE_BOOKS.find(b => b.id === v.book) : null;
-                                    const bookPrefix = bookInfo ? getBookAbbr(bookInfo, version) + ' ' : '';
-                                    newVerses[idx] = { ...newVerses[idx], verseInput: e.target.value, reference: v.book ? bookPrefix + e.target.value : e.target.value };
-                                    setEditingCustomSet({ ...editingCustomSet, verses: newVerses });
-                                  }} onKeyDown={async (e) => {
-                                    if (e.key === 'Enter' || e.key === 'Tab') {
-                                      if (e.key === 'Enter') e.preventDefault();
-                                      const bookInfo = BIBLE_BOOKS.find(b => b.id === v.book);
-                                      if (!bookInfo) return alert(t("請先選擇書卷", "Please select a book first"));
-                                      await autoFetchVerse(bookInfo, v.verseInput || '', idx);
-                                    }
-                                  }} placeholder={t("章:節 (如 3:16)", "Ch:Vs (e.g. 3:16)")}
-                                    style={{ width: isNarrowEditor ? '84px' : '110px', boxSizing: 'border-box', padding: '0.5rem', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} />
                                   </div>
-
-                                  <textarea
-                                    value={v.text}
-                                    readOnly={!v.reference}
-                                    onChange={e => {
-                                      const newVerses = [...editingCustomSet.verses];
-                                      newVerses[idx].text = e.target.value;
-                                      setEditingCustomSet({ ...editingCustomSet, verses: newVerses });
-                                    }}
-                                    placeholder={t("請先在前方選定書卷並輸入章節，按下 Enter 或 Tab 後即可解鎖此欄位", "Select book & chapter:verse, press Enter/Tab to unlock")}
-                                    style={{
-                                      flex: 1,
-                                      minWidth: 0,
-                                      padding: '0.5rem',
-                                      borderRadius: '4px',
-                                      border: '1px solid #cbd5e1',
-                                      minHeight: isNarrowEditor ? '116px' : '40px',
-                                      resize: 'vertical',
-                                      fontSize: '0.9rem',
-                                      background: !v.reference ? '#e2e8f0' : '#ffffff',
-                                      cursor: !v.reference ? 'not-allowed' : 'text',
-                                      color: !v.reference ? '#94a3b8' : '#0f172a'
-                                    }}
-                                  />
 
                                   {/* Action column: read-aloud / record / delete (stacked on phones). */}
                                   <div style={{ display: 'flex', flexDirection: isNarrowEditor ? 'column' : 'row', gap: '0.4rem', flexShrink: 0 }}>
@@ -11768,7 +11617,7 @@ const zhcnDict = {
                                       becomes a red ⏹ stop (long passages must be stoppable). */}
                                   <button
                                     type="button"
-                                    disabled={!v.text}
+                                    disabled={!v.text && !v.textEn}
                                     onClick={async () => {
                                       const stopAll = () => {
                                         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -11798,7 +11647,8 @@ const zhcnDict = {
                                       }
                                       // speakText resolves when TTS ends (or is cancelled) — only
                                       // clear if this row is still the active one.
-                                      await speakText(v.text, 1.0, getVoiceLangForVersion(version));
+                                      const readEn = baseLang(version) === 'en' ? !!v.textEn : !v.text;
+                                      await speakText(readEn ? v.textEn : v.text, 1.0, readEn ? 'en-US' : 'zh-TW');
                                       setEditorPlayingVerse(cur => (cur === idx ? null : cur));
                                     }}
                                     title={editorPlayingVerse === idx ? t('停止朗讀', 'Stop reading') : t('朗讀這節', 'Read this verse aloud')}
@@ -11928,53 +11778,59 @@ const zhcnDict = {
                               <button type="button" onClick={() => {
                                 setEditingCustomSet({
                                   ...editingCustomSet,
-                                  verses: [...editingCustomSet.verses, { book: null, verseInput: '', reference: '', text: '' }]
+                                  verses: [...editingCustomSet.verses, { reference: '', text: '', textEn: '' }]
                                 });
                               }} style={{ background: '#e2e8f0', color: '#475569', border: '1px dashed #94a3b8', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', flex: 1, fontWeight: 'bold' }}>
-                                + {t("新增一節經文", "Add Verse")}
+                                + {t("新增一段", "Add paragraph")}
                               </button>
-                              <button type="button" onClick={() => setBulkImportState({ text: '', busy: false, progress: '', failed: [] })}
-                                title={t('貼上經文出處清單(每行一個),自動抓取經文', 'Paste a list of references (one per line) to auto-fetch the verses')}
+                              <button type="button" onClick={() => setBulkImportState({ zh: '', en: '', busy: false })}
+                                title={t('把中文與英文全文各貼一份，按段落自動配對成一段一段', 'Paste the full Chinese and English texts; paragraphs are paired one by one')}
                                 style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px dashed #93c5fd', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer', flex: 1, fontWeight: 'bold' }}>
-                                📋 {t("輸入出處批次匯入", "Bulk Import by Reference")}
+                                📋 {t("貼上全文對照匯入", "Paste full text (both languages)")}
                               </button>
                             </div>
 
-                            {bulkImportState && (
-                              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1300, padding: '1rem' }} onClick={(e) => { if (e.target === e.currentTarget && !bulkImportState.busy) setBulkImportState(null); }}>
-                                <div style={{ background: '#fff', borderRadius: 14, padding: '1.5rem', width: 'min(520px, 100%)', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
-                                  <h3 style={{ margin: '0 0 0.4rem', color: '#1e293b' }}>📋 {t('輸入出處來建立經文組', 'Build the set from references')}</h3>
+                            {bulkImportState && (() => {
+                              const zhParas = splitParagraphs(bulkImportState.zh);
+                              const enParas = splitParagraphs(bulkImportState.en);
+                              const mismatch = zhParas.length && enParas.length && zhParas.length !== enParas.length;
+                              const boxStyle = { width: '100%', minHeight: '220px', padding: '0.7rem', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' };
+                              return (
+                              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000, padding: '1rem' }}>
+                                <div style={{ background: '#fff', borderRadius: 14, padding: '1.5rem', width: 'min(960px, 100%)', maxHeight: '92vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+                                  <h3 style={{ margin: '0 0 0.4rem', color: '#1e293b' }}>📋 {t('貼上全文，自動配對段落', 'Paste both texts, paragraphs are paired')}</h3>
                                   <p style={{ margin: '0 0 0.8rem', color: '#64748b', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                                    {t('每行或以逗號分隔貼上經文出處(例:太 19:14、詩 139:13-14),系統會自動抓取經文內容。', 'Paste references one per line or separated by commas (e.g. 太 19:14, 詩 139:13-14) — the verse text is fetched automatically.')}
+                                    {t('左邊貼中文全文、右邊貼英文全文。段落用空行分開（沒有空行時就一行一段），第 1 段中文會配第 1 段英文，依此類推。翻譯是作者自己寫的，不用機器翻譯。', 'Chinese on the left, English on the right. Separate paragraphs with a blank line (or one per line). Paragraph 1 pairs with paragraph 1, and so on. Translations are your own — no machine translation.')}
                                   </p>
-                                  <p style={{ margin: '-0.4rem 0 0.8rem', color: '#64748b', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                                    {t('同一章的其他節可以用逗號接在後面：「約翰福音 1:1, 4」＝ 1:1 與 1:4；「創世記 1:26-28, 2:7」＝ 同書卷的 2:7。', 'After a reference, a comma followed by a bare verse stays in the same chapter: "John 1:1, 4" = 1:1 and 1:4; "Genesis 1:26-28, 2:7" = 2:7 of the same book.')}
-                                  </p>
-                                  <textarea
-                                    value={bulkImportState.text}
-                                    disabled={bulkImportState.busy}
-                                    onChange={e => setBulkImportState(s => ({ ...s, text: e.target.value }))}
-                                    placeholder={[[40, '19:14'], [41, '10:16'], [19, '127:3'], [23, '49:15']].map(([id, cv]) => `${getBookAbbr(BIBLE_BOOKS.find(b => b.id === id), version)} ${cv}`).join('\n')}
-                                    style={{ width: '100%', minHeight: '180px', padding: '0.7rem', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.95rem', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }}
-                                  />
-                                  {bulkImportState.failed?.length > 0 && !bulkImportState.busy && (
-                                    <div style={{ margin: '0.6rem 0 0', padding: '0.6rem 0.8rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: '0.85rem' }}>
-                                      {t('這些行無法辨識或抓不到經文,請修改後重試或手動輸入:', 'These lines could not be matched/fetched — fix and retry, or add them manually:')}
-                                      <div style={{ marginTop: 4, fontWeight: 600 }}>{bulkImportState.failed.join('、')}</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: isNarrowEditor ? '1fr' : '1fr 1fr', gap: '0.8rem' }}>
+                                    <div>
+                                      <div style={{ fontWeight: 700, color: '#334155', marginBottom: 4 }}>{t('中文', 'Chinese')} <span style={{ color: '#94a3b8', fontWeight: 500 }}>({zhParas.length})</span></div>
+                                      <textarea value={bulkImportState.zh} onChange={e => setBulkImportState(st => ({ ...st, zh: e.target.value }))} lang="zh-Hant"
+                                        placeholder={'床前明月光，\n疑是地上霜。\n\n舉頭望明月，\n低頭思故鄉。'} style={boxStyle} />
                                     </div>
-                                  )}
+                                    <div>
+                                      <div style={{ fontWeight: 700, color: '#334155', marginBottom: 4 }}>English <span style={{ color: '#94a3b8', fontWeight: 500 }}>({enParas.length})</span></div>
+                                      <textarea value={bulkImportState.en} onChange={e => setBulkImportState(st => ({ ...st, en: e.target.value }))} lang="en"
+                                        placeholder={'Before my bed, the moonlight glows,\nAs if frost had settled on the ground.\n\nI lift my head to watch the moon,\nThen lower it, thinking of home.'} style={boxStyle} />
+                                    </div>
+                                  </div>
+                                  {mismatch ? (
+                                    <div style={{ margin: '0.6rem 0 0', padding: '0.6rem 0.8rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, color: '#92400e', fontSize: '0.85rem' }}>
+                                      {t('兩邊段落數不同（中文 {a} 段、英文 {b} 段）。仍可匯入，多出來的段落另一邊會留白，之後可以在列表裡補。', 'Paragraph counts differ (Chinese {a}, English {b}). You can still import; the extra paragraphs get a blank other side you can fill in later.').replace('{a}', String(zhParas.length)).replace('{b}', String(enParas.length))}
+                                    </div>
+                                  ) : null}
                                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1rem', alignItems: 'center' }}>
-                                    {bulkImportState.busy && <span style={{ color: '#64748b', fontSize: '0.85rem' }}>{t('抓取中… {progress}', 'Fetching… {progress}').replace('{progress}', String(bulkImportState.progress))}</span>}
-                                    <button type="button" disabled={bulkImportState.busy} onClick={() => setBulkImportState(null)} style={{ background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', padding: '0.55rem 1.1rem', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold' }}>
+                                    <button type="button" onClick={() => setBulkImportState(null)} style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', padding: '0.55rem 1rem', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
                                       {t('取消', 'Cancel')}
                                     </button>
-                                    <button type="button" disabled={bulkImportState.busy || !bulkImportState.text.trim()} onClick={runBulkImport} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '0.55rem 1.4rem', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold' }}>
-                                      {bulkImportState.busy ? t('匯入中…', 'Importing…') : t('匯入', 'Import')}
+                                    <button type="button" disabled={!zhParas.length && !enParas.length} onClick={runBulkImport} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                                      {t('匯入 {n} 段', 'Import {n} paragraphs').replace('{n}', String(Math.max(zhParas.length, enParas.length)))}
                                     </button>
                                   </div>
                                 </div>
                               </div>
-                            )}
+                              );
+                            })()}
                           </div>
 
                           <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -11996,7 +11852,7 @@ const zhcnDict = {
 
                                 // If published, also remove from PartyKit
                                 if (publishedVerseSets.some(p => p.id === editingCustomSet.id)) {
-                                  fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets", {
+                                  fetch(`${PARTY_DB}/custom-sets`, {
                                     method: "DELETE",
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({ id: editingCustomSet.id, adminEmail: userEmail, adminName: playerName })
@@ -12013,11 +11869,14 @@ const zhcnDict = {
                             ) : <span />}
                             <button type="button" onClick={() => {
                               if (!editingCustomSet.title) return alert(t("請填寫標題", "Please fill in title"));
-                              if (editingCustomSet.verses.length === 0) return alert(t("請至少新增一節經文", "Please add at least one verse"));
+                              if (!editingCustomSet.verses.some(v => (v.text || '').trim() || (v.textEn || '').trim())) return alert(t("請至少輸入一段內容", "Please add at least one paragraph"));
 
+                              const sourceLang = editingCustomSet.sourceLang || (baseLang(version) === 'en' ? 'en' : 'zh');
                               const setObj = {
                                 ...editingCustomSet,
-                                language: version,
+                                sourceLang,
+                                verses: normalizeItemsForSave(editingCustomSet.verses, sourceLang),
+                                language: 'cuv',
                                 id: editingCustomSet.id || `custom-${Date.now()}`,
                                 authorName: (editingCustomSet.authorName && editingCustomSet.authorName !== "Anonymous")
                                   ? editingCustomSet.authorName
@@ -12052,7 +11911,7 @@ const zhcnDict = {
                                   lastEditorName: playerName || "Anonymous",
                                   lastEditedAt: new Date().toISOString()
                                 };
-                                fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets", {
+                                fetch(`${PARTY_DB}/custom-sets`, {
                                   method: "POST",
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ ...publishedObj, adminEmail: userEmail, adminName: playerName })
@@ -12073,7 +11932,7 @@ const zhcnDict = {
                                   return [publishedObj, ...prev];
                                 });
                               } else {
-                                fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets", {
+                                fetch(`${PARTY_DB}/custom-sets`, {
                                   method: "DELETE",
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ id: setObj.id, adminEmail: userEmail, adminName: playerName })
@@ -12891,7 +12750,7 @@ const zhcnDict = {
                               return currentSetList.map((set, i) => (
                                 <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: i % 2 === 0 ? '#ffffff' : '#f8fafc', transition: 'background 0.2s', cursor: 'pointer' }} onClick={() => {
                                   setSelectedSetId(set.id);
-                                  fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets/view", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
+                                  fetch(`${PARTY_DB}/custom-sets/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
                                   setViewCounts(prev => ({ ...prev, [set.id]: (prev[set.id] || 0) + 1 }));
                                 }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = i % 2 === 0 ? '#ffffff' : '#f8fafc'}>
                                   <td style={{ padding: '1rem', textAlign: 'center', color: '#3b82f6', fontSize: '1.2rem' }}>{customVerseSets.some(c => c.id === set.id) ? <Crown size={22} /> : <Library size={22} />}</td>
@@ -12944,7 +12803,7 @@ const zhcnDict = {
                                               localStorage.setItem('verseRain_hidden_official_sets', JSON.stringify(nextHidden));
                                               return;
                                             }
-                                            fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets", {
+                                            fetch(`${PARTY_DB}/custom-sets`, {
                                               method: "DELETE",
                                               headers: { "Content-Type": "application/json" },
                                               body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName })
@@ -14044,7 +13903,7 @@ const zhcnDict = {
                                         setViewingPlayerGarden({ playerName: name, gardenData: null, loading: true });
                                         try {
                                           const [gardenRes, pointsRes] = await Promise.all([
-                                            fetch(`https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/garden?player=${encodeURIComponent(name)}`),
+                                            fetch(`${PARTY_DB}/garden?player=${encodeURIComponent(name)}`),
                                             fetch(`/api/get-creator-points?author=${encodeURIComponent(name)}`).catch(() => null)
                                           ]);
                                           const data = await gardenRes.json();
@@ -14136,7 +13995,7 @@ const zhcnDict = {
                               <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.2s' }} onClick={() => {
                                 setMainTab('versesets');
                                 setSelectedSetId(set.id);
-                                fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets/view", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
+                                fetch(`${PARTY_DB}/custom-sets/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
                                 setViewCounts(prev => ({ ...prev, [set.id]: (prev[set.id] || 0) + 1 }));
                               }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#eff6ff'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                                 <td style={{ padding: '0.8rem 1rem', fontWeight: 'bold', color: idx === 0 ? '#d97706' : idx === 1 ? '#94a3b8' : idx === 2 ? '#b45309' : '#64748b', fontSize: '1.2rem' }}>#{idx + 1}</td>
@@ -14149,7 +14008,7 @@ const zhcnDict = {
                                       e.stopPropagation();
                                       setMainTab('versesets');
                                       setSelectedSetId(set.id);
-                                      fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets/view", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
+                                      fetch(`${PARTY_DB}/custom-sets/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
                                       setViewCounts(prev => ({ ...prev, [set.id]: (prev[set.id] || 0) + 1 }));
                                     }}
                                     style={{ backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'transform 0.1s' }}
@@ -15686,7 +15545,7 @@ const zhcnDict = {
                   setResetBusy(true);
                   setResetError("");
                   try {
-                    const res = await fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/reset-password", {
+                    const res = await fetch(`${PARTY_DB}/reset-password`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ token: resetToken, newPassword: pw1 })
@@ -15820,7 +15679,7 @@ const zhcnDict = {
                     setAuthLoading(true);
                     setAuthError("");
                     try {
-                      const res = await fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/verify-email", {
+                      const res = await fetch(`${PARTY_DB}/verify-email`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email: verifyEmail, code, personalCode: localStorage.getItem('verserain_personal_code') || undefined })
@@ -15865,7 +15724,7 @@ const zhcnDict = {
                     const payload = { email, password, nickname: nameStr, inviter, personalCode: localCode };
 
                     // Hit PartyKit Backend
-                    const host = "https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db" + endpoint;
+                    const host = PARTY_DB + endpoint;
                     const response = await fetch(host, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -15979,7 +15838,7 @@ const zhcnDict = {
                         setAuthLoading(true);
                         setAuthError("");
                         try {
-                          const res = await fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/forgot-password", {
+                          const res = await fetch(`${PARTY_DB}/forgot-password`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ email })
@@ -17100,7 +16959,7 @@ const zhcnDict = {
                         setSelectedSetId(set.id);
                         setAuthorSetsModal(null);
                         setMainTab('versesets');
-                        fetch("https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db/custom-sets/view", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
+                        fetch(`${PARTY_DB}/custom-sets/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: set.id, adminEmail: userEmail, adminName: playerName }) }).catch(e => e);
                         setViewCounts(prev => ({ ...prev, [set.id]: (prev[set.id] || 0) + 1 }));
                       }}
                       style={{ width: '100%', textAlign: 'left', background: set.id === currentSet?.id ? '#eff6ff' : '#ffffff', border: set.id === currentSet?.id ? '1px solid #93c5fd' : '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', cursor: 'pointer', display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'center', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)' }}

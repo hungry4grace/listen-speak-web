@@ -1,3 +1,4 @@
+import { PARTY_DB } from './lib/partyHost.js';
 // 題庫創作者親聲朗讀 — client API for per-verse creator recordings on
 // custom verse sets. Keyed by (setId, reference): the same verse in two
 // different sets carries two independent recordings. One recording per
@@ -6,7 +7,7 @@
 // Audio rides the same chunked-base64 pattern as team voice messages:
 // upload slices → register the pointer → listeners fetch + reassemble.
 
-const HOST = 'https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db';
+const HOST = PARTY_DB;
 
 async function jpost(path, body) {
   const res = await fetch(`${HOST}${path}`, {
