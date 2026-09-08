@@ -1,5 +1,7 @@
 {
+  "$schema": "https://www.partykit.io/schema.json",
   "name": "listenspeak-party",
   "main": "src/party/server.js",
-  "compatibilityDate": "2026-05-16"
+  "compatibilityDate": "2026-05-16",
+  "vars": {}
 }
