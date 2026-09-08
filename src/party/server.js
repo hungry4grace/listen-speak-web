@@ -640,7 +640,11 @@ export default class Server {
                   <p>請在應用程式中輸入此驗證碼以啟用您的帳號。</p>
                 </div>
               `;
-              await this.sendEmail(email.toLowerCase(), "聽&說 帳號驗證碼 (Listen&Speak Account Verification)", emailHtml);
+              const emailResult = await this.sendEmail(email.toLowerCase(), "聽&說 帳號驗證碼 (Listen&Speak Account Verification)", emailHtml);
+              if (!emailResult.success) {
+                 // Don't pretend the code was sent — the client would show "check your inbox" forever.
+                 return new Response(JSON.stringify({ error: '驗證碼寄送失敗，請稍後再試 (Failed to send the verification email)' }), { status: 500, headers: corsHeaders });
+              }
               
               return new Response(JSON.stringify({ success: true, message: 'Verification email sent' }), { status: 200, headers: corsHeaders });
            } catch(e) {
