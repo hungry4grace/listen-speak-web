@@ -598,8 +598,10 @@ export default class Server {
 
               let user = await this.room.storage.get(`user:${email.toLowerCase()}`);
 
-              // Handle conflict or claim ghost account
-              if (user && user.password) {
+              // Handle conflict or claim ghost account. An account that never
+              // finished verification (code lost, mail bounced) may register again:
+              // it gets a fresh code and a fresh email instead of a dead end.
+              if (user && user.password && user.verified !== false) {
                  return new Response(JSON.stringify({ error: 'Email already registered' }), { status: 409, headers: corsHeaders });
               }
 
