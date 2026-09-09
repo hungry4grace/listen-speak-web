@@ -192,8 +192,8 @@ export default class Server {
         })
       });
       const data = await response.json();
-      if (response.ok) return { success: true, data };
-      console.error("Resend API Error", data);
+      if (response.ok) { console.log("Resend accepted", to, data?.id); return { success: true, data }; }
+      console.error("Resend API Error", to, JSON.stringify(data));
       return { success: false, error: data.message || "Failed to send email" };
     } catch (e) {
       console.error("Email fetch error", e);
