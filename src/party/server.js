@@ -643,7 +643,7 @@ export default class Server {
               const emailResult = await this.sendEmail(email.toLowerCase(), "聽&說 帳號驗證碼 (Listen&Speak Account Verification)", emailHtml);
               if (!emailResult.success) {
                  // Don't pretend the code was sent — the client would show "check your inbox" forever.
-                 return new Response(JSON.stringify({ error: '驗證碼寄送失敗，請稍後再試 (Failed to send the verification email)' }), { status: 500, headers: corsHeaders });
+                 return new Response(JSON.stringify({ error: `驗證碼寄送失敗，請稍後再試 (Failed to send the verification email: ${emailResult.error || 'unknown'})` }), { status: 500, headers: corsHeaders });
               }
               
               return new Response(JSON.stringify({ success: true, message: 'Verification email sent' }), { status: 200, headers: corsHeaders });
