@@ -4,11 +4,12 @@
 //
 // Source: chinese-poetry (MIT) 全唐诗/唐诗三百首.json — Traditional Chinese,
 // one array of { author, title, paragraphs[], tags[] }. Poems are grouped into
-// sets by form (五言絕句 / 七言絕句 / …); every couplet ("paragraph") becomes one
-// item labelled "<title> · <author> ①". Optional translations.json maps
-// "<title>|<author>" → array of English lines (one per couplet) — Witter
-// Bynner's public-domain 1929 renderings where we have them; authors can add
-// the rest in the editor.
+// sets by form (五言絕句 / 七言絕句 / …); every poem becomes ONE item labelled
+// "<title> · <author>" whose text is the couplets joined by newlines (the phrase
+// splitter breaks them on punctuation for the player and games). Optional
+// translations.json maps "<title>|<author>" → array of English lines (one per
+// couplet) — Witter Bynner's public-domain 1929 renderings where we have them;
+// authors can add the rest in the editor.
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -30,12 +31,36 @@ const FORMS = [
 ];
 const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 const circ = (i) => CIRCLED[i] || `(${i + 1})`;
+// Two different poems can share title + author within one form (王維 wrote two
+// 送別); labels key recordings and comments, so make the second one 「送別 · 王維 ②」.
+const uniqueLabels = (items) => {
+  const seen = new Map();
+  return items.map((v) => {
+    const n = (seen.get(v.reference) || 0) + 1;
+    seen.set(v.reference, n);
+    return n === 1 ? v : { ...v, reference: `${v.reference} ${circ(n - 1)}` };
+  });
+};
 const cleanTitle = (t) => String(t).replace(/^(鼓吹曲辭|橫吹曲辭|相和歌辭|雜曲歌辭|琴曲歌辭|新樂府辭|近代曲辭|雜歌謠辭|輞川集)\s+/, '').trim();
 
+// 17 poems in the source carry no form tag; infer the form from the verse
+// structure (characters per line × number of lines), the way 唐詩三百首 itself
+// files them: 5×4 絕句, 7×4 絕句, 5×8 / 7×8 律詩, longer = 古詩, 樂府 by title.
+const YUEFU_PREFIX = /^(鼓吹曲辭|橫吹曲辭|相和歌辭|雜曲歌辭|琴曲歌辭|新樂府辭|近代曲辭|雜歌謠辭)/;
+const inferForm = (p) => {
+  if (YUEFU_PREFIX.test(p.title)) return '乐府';
+  const lines = p.paragraphs.join('').split(/[，。？！；]/).filter(Boolean);
+  const n = lines.length;
+  const len = lines[0]?.length || 0;
+  const uniform = lines.every(l => l.length === len);
+  if (uniform && len === 5) return n === 4 ? '五言绝句' : n === 8 ? '五言律诗' : '五言古诗';
+  if (uniform && len === 7) return n === 4 ? '七言绝句' : n === 8 ? '七言律诗' : '七言古诗';
+  return '七言古诗';
+};
 const groups = new Map(FORMS.map(f => [f[0], []]));
 const other = [];
 for (const p of poems) {
-  const f = FORMS.find(f => (p.tags || []).includes(f[0]));
+  const f = FORMS.find(f => (p.tags || []).includes(f[0])) || FORMS.find(f => f[0] === inferForm(p));
   (f ? groups.get(f[0]) : other).push(p);
 }
 const buildSet = (id, title, titleEn, list, desc) => ({
@@ -46,20 +71,20 @@ const buildSet = (id, title, titleEn, list, desc) => ({
   language: 'cuv',
   sourceLang: 'zh',
   builtIn: true,
-  verses: list.flatMap((p) => {
+  verses: uniqueLabels(list.map((p) => {
     const t = cleanTitle(p.title);
     const tr = translations[`${t}|${p.author}`] || translations[`${p.title}|${p.author}`] || [];
-    return p.paragraphs.map((para, i) => ({
-      reference: `${t} · ${p.author} ${circ(i)}`,
-      text: para,
-      textEn: tr[i] || '',
+    return {
+      reference: `${t} · ${p.author}`,
+      text: p.paragraphs.join('\n'),
+      textEn: tr.length ? tr.join('\n') : '',
       poem: t,
       author: p.author,
-    }));
-  }),
+    };
+  })),
 });
 const sets = FORMS.map(([tag, id, zh, en]) => buildSet(id, `唐詩三百首・${zh}`, `300 Tang Poems · ${en}`, groups.get(tag),
-  `《唐詩三百首》${zh}，共 ${groups.get(tag).length} 首。每一段是一聯，可以聽、跟讀、錄音、挑戰。`));
+  `《唐詩三百首》${zh}，共 ${groups.get(tag).length} 首。每一首詩是一段，可以聽、跟讀、錄音、挑戰。`));
 if (other.length) sets.push(buildSet('other', '唐詩三百首・其他', '300 Tang Poems · Others', other, `《唐詩三百首》其他體裁，共 ${other.length} 首。`));
 
 const out = resolve(here, '../src/content/tangPoems.js');

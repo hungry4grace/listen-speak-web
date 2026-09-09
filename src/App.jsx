@@ -15051,7 +15051,7 @@ const zhcnDict = {
               {/* flex:1 + minHeight:0 — without them a flex child never shrinks
                   below its content, so long passages overflowed past 85vh with
                   no scrollbar and the tail of the verse was unreachable. */}
-              <div style={{ color: '#475569', fontSize: '1.2rem', lineHeight: '1.8', flex: '1 1 auto', minHeight: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', paddingRight: '1rem', fontWeight: '500', fontFamily: 'var(--app-font-family)', wordBreak: 'break-word' }}>
+              <div style={{ color: '#475569', fontSize: '1.2rem', lineHeight: '1.8', flex: '1 1 auto', minHeight: 0, overflowY: 'auto', whiteSpace: 'pre-line', WebkitOverflowScrolling: 'touch', paddingRight: '1rem', fontWeight: '500', fontFamily: 'var(--app-font-family)', wordBreak: 'break-word' }}>
                 <span className="ls-on-light"><Annotated text={verseViewModal.text} mode={annotationOf(version)} /></span>
               </div>
 
