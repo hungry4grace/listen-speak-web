@@ -69,6 +69,14 @@ export default function BlindModeGame({
     // 「聆聽中…」 — the player just sees every phrase scored wrong.
     const fatalMicErrorRef = useRef('');
     const gameRootRef = useRef(null);
+    // Mic diagnostics for the debug HUD + the stuck-recognizer watchdog: what
+    // the recognizer last told us and when. A session that Chrome silently
+    // wedges (start() throws "already started", yet no onresult/onend ever
+    // arrives) shows here as a growing "results N · Xs ago" gap.
+    const micDiagRef = useRef({ lastEvent: 'init', lastEventAt: Date.now(), lastResultAt: 0, lastStartAt: Date.now(), results: 0, lastError: '', recreated: 0 });
+    const [diagTick, setDiagTick] = useState(0);
+    // Bumped to tear down and recreate the SpeechRecognition instance.
+    const [recGen, setRecGen] = useState(0);
 
     const currentBlock = activePhrases[currentSeqIndex] || null;
     const currentBlockRef = useRef(currentBlock);
@@ -144,9 +152,25 @@ export default function BlindModeGame({
     useEffect(() => {
         const heartbeat = setInterval(() => {
             if (!isMountedRef.current) return;
+            setDiagTick(n => n + 1); // refresh the debug HUD's mic line
             if (isCompleteRef.current) return;
             if (isSpeakingRef.current) return;
             ensureMicAlive();
+            // Stuck-recognizer watchdog. A healthy session produces either
+            // results (player talking) or an onend→onstart hop (Chrome closes
+            // quiet stretches within ~8 s). Nothing for 12 s while we are not
+            // speaking means the instance is wedged: start() keeps throwing
+            // "already started" but no audio is being processed. Recreate it.
+            const d = micDiagRef.current;
+            if (fatalMicErrorRef.current) return;
+            const lastAlive = Math.max(d.lastResultAt, d.lastStartAt, d.lastEventAt);
+            if (Date.now() - lastAlive > 12000) {
+                d.lastEvent = 'recreate';
+                d.lastEventAt = d.lastStartAt = Date.now();
+                d.recreated += 1;
+                if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) {} }
+                setRecGen(g => g + 1);
+            }
         }, 2000);
         return () => clearInterval(heartbeat);
     }, []);
@@ -163,6 +187,20 @@ export default function BlindModeGame({
     // abort()/restart the recognizer between blocks — that dropped ~100-300ms
     // of audio on each restart and made every other block fail. Called only
     // from advance timeouts, never inside onresult.
+    // Readback TTS with a hard cap: if speechSynthesis never fires onend (a
+    // Chrome bug after cancel()/voice switches) the App-level speakText only
+    // resolves after its 8 s+ safety timeout, and the mic stays muted
+    // (isSpeakingRef) that whole time — the player keeps reciting into a dead
+    // window and every block times out. Cap the wait at a generous estimate
+    // of the utterance length instead.
+    const speakCapped = (text) => {
+        const capMs = Math.min(9000, 900 + String(text || '').length * 450);
+        return Promise.race([
+            speakText(text, 1.0, TTS_LANG),
+            new Promise((res) => setTimeout(res, capMs)),
+        ]);
+    };
+
     const consumeSessionSoFar = () => {
         lastMatchedLengthRef.current = fullSessionLenRef.current;
         if (pauseTimeoutRef.current) {
@@ -218,7 +256,7 @@ export default function BlindModeGame({
                             clearTimeout(pauseTimeoutRef.current);
                             pauseTimeoutRef.current = null;
                         }
-                        speakText(plan.text, 1.0, TTS_LANG).then(() => {
+                        speakCapped(plan.text).then(() => {
                             if (!isMountedRef.current) return;
                             setTimeout(advanceMiss, plan.advanceDelayMs);
                         });
@@ -446,7 +484,7 @@ export default function BlindModeGame({
                             clearTimeout(pauseTimeoutRef.current);
                             pauseTimeoutRef.current = null;
                         }
-                        speakText(plan.text, 1.0, TTS_LANG).then(() => {
+                        speakCapped(plan.text).then(() => {
                             if (!isMountedRef.current) return;
                             isSpeakingRef.current = false;
                             setTimeout(advance, plan.advanceDelayMs);
@@ -484,6 +522,8 @@ export default function BlindModeGame({
 
         recognition.onstart = () => {
             fatalMicErrorRef.current = '';
+            micDiagRef.current.lastEvent = 'start';
+            micDiagRef.current.lastEventAt = micDiagRef.current.lastStartAt = Date.now();
             setMicStatus(t("聆聽中...", "Listening..."));
             // A fresh session starts with empty event.results — zero ALL the
             // bookkeeping to match. Critically, cancel any pending 1500ms
@@ -517,6 +557,9 @@ export default function BlindModeGame({
             }
             latestTranscriptRef.current = { transcript: sessionTranscript, alternatives };
             fullSessionLenRef.current = sessionTranscript.length; // real length — never faked
+            micDiagRef.current.lastEvent = 'result';
+            micDiagRef.current.lastEventAt = micDiagRef.current.lastResultAt = Date.now();
+            micDiagRef.current.results += 1;
 
             // While WE are speaking (readback / reference), the mic still hears
             // our own TTS and it still lands in event.results. This used to
@@ -550,6 +593,9 @@ export default function BlindModeGame({
         // distinguishable; before this it was a console.log nobody sees.
         recognition.onerror = (e) => {
             const code = e.error || 'unknown';
+            micDiagRef.current.lastEvent = 'error:' + code;
+            micDiagRef.current.lastEventAt = Date.now();
+            micDiagRef.current.lastError = code;
             // no-speech / aborted are normal punctuation in a long session:
             // Chrome ends a quiet stretch and onend restarts us.
             if (code === 'no-speech' || code === 'aborted') return;
@@ -576,6 +622,8 @@ export default function BlindModeGame({
         };
 
         recognition.onend = () => {
+            micDiagRef.current.lastEvent = 'end';
+            micDiagRef.current.lastEventAt = Date.now();
             if (fatalMicErrorRef.current) return; // nothing to retry into
             if (isMountedRef.current && recognitionRef.current) {
                 setTimeout(() => {
@@ -613,7 +661,7 @@ export default function BlindModeGame({
             clearInterval(heartbeat);
             try { recognition.stop(); } catch(e) {}
         };
-    }, [TTS_LANG]);
+    }, [TTS_LANG, recGen]);
 
     useEffect(() => {
         return () => {
@@ -873,6 +921,9 @@ export default function BlindModeGame({
 
             {isDebugMode && (
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0.9rem 1.4rem', textAlign: 'left', backgroundColor: 'rgba(0,0,0,0.82)', borderTop: '1px solid #334155', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <div style={{ color: '#64748b', fontSize: '0.8rem', fontFamily: 'monospace' }} data-tick={diagTick}>
+                        {(() => { const d = micDiagRef.current; const ago = (ms) => ms ? `${Math.max(0, Math.round((Date.now() - ms) / 1000))}s` : '—'; return `mic: ${d.lastEvent} ${ago(d.lastEventAt)} ago · results ${d.results} (last ${ago(d.lastResultAt)}) · speaking ${isSpeakingRef.current ? 'yes' : 'no'} · err ${d.lastError || '—'} · recreated ${d.recreated}`; })()}
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', flexWrap: 'wrap' }}>
                         <span style={{ color: '#94a3b8', fontSize: '1rem', fontWeight: 700, minWidth: '5.5rem' }}>{t("期待：", "Expects: ")}</span>
                         <span style={{ color: '#facc15', fontSize: '1.5rem', fontWeight: 'bold', wordBreak: 'break-word' }}>{debugTarget || '—'}</span>
