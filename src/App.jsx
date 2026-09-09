@@ -4255,8 +4255,12 @@ export default function App() {
     if (annotationOf(version) || annotationOf(localStorage.getItem('verseRain_bilingualSecondaryVersion'))) loadAnnotator().catch(() => {});
   }, [version]);
   const [simplifiedReady, setSimplifiedReady] = useState(hasSimplifiedConverter());
+  const [bilingualSecondaryVersion, setBilingualSecondaryVersion] = useState(() => localStorage.getItem('verseRain_bilingualSecondaryVersion') || 'kjv');
+  // Load the Traditional→Simplified converter as soon as EITHER language needs
+  // it — the second-language line (简体 / 简体与拼音) uses it just like the main one.
   useEffect(() => {
-    if (simplifiedReady || baseLang(version) !== 'cuvs') return;
+    if (simplifiedReady) return;
+    if (baseLang(version) !== 'cuvs' && baseLang(bilingualSecondaryVersion) !== 'cuvs') return;
     let alive = true;
     import('opencc-js').then((m) => {
       if (!alive) return;
@@ -4264,8 +4268,7 @@ export default function App() {
       setSimplifiedReady(true);
     }).catch(() => {});
     return () => { alive = false; };
-  }, [version, simplifiedReady]);
-  const [bilingualSecondaryVersion, setBilingualSecondaryVersion] = useState(() => localStorage.getItem('verseRain_bilingualSecondaryVersion') || 'kjv');
+  }, [version, bilingualSecondaryVersion, simplifiedReady]);
   useEffect(() => {
     localStorage.setItem('verseRain_version', version);
   }, [version]);
@@ -5615,7 +5618,7 @@ export default function App() {
       }
     });
     return bestScore > 0 ? bestSet : null;
-  }, [bilingualSecondaryVersion, version, getSetsForVersion]);
+  }, [bilingualSecondaryVersion, version, getSetsForVersion, simplifiedReady]);
 
   const secondaryRainSet = React.useMemo(() => {
     const secondarySets = getSetsForVersion(bilingualSecondaryVersion);
@@ -5718,7 +5721,7 @@ export default function App() {
       }
     }
     return null;
-  }, [displayedDailyVerse, bilingualSecondaryVersion, version, getSetsForVersion, dailyVerseDate]);
+  }, [displayedDailyVerse, bilingualSecondaryVersion, version, getSetsForVersion, dailyVerseDate, simplifiedReady]);
 
   const dummySet = useMemo(() => [{
     id: "dummy",
