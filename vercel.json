@@ -5,6 +5,10 @@
   "installCommand": "npm install --include=dev",
   "rewrites": [
     {
+      "source": "/lc",
+      "destination": "/api/listen-card"
+    },
+    {
       "source": "/privacy",
       "destination": "/index.html"
     },
