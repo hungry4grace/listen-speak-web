@@ -7,9 +7,9 @@
 // rendering that corresponds to that one Chinese sentence.
 //
 // Chapters 1–3 for now; append more chapters to CHAPTERS in the same shape.
+// Each chapter is ONE item; the sentence pairs are kept for line-by-line display.
 
 const CN_NUM = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
 const chapterName = (n) => `第${n <= 10 ? CN_NUM[n] : n}章`;
 
 // [zh, en] pairs per chapter.
@@ -38,21 +38,21 @@ const CHAPTERS = [
   ],
 ];
 
-const verses = CHAPTERS.flatMap((sentences, ci) =>
-  sentences.map(([zh, en], si) => ({
-    reference: `${chapterName(ci + 1)} ${CIRCLED[si] || `(${si + 1})`}`,
-    text: zh,
-    textEn: en,
-    chapter: ci + 1,
-  }))
-);
+// One item per chapter. The Chinese sentences and their English renderings
+// are joined line by line, so line N of the English is line N of the Chinese.
+const verses = CHAPTERS.map((sentences, ci) => ({
+  reference: chapterName(ci + 1),
+  text: sentences.map(([zh]) => zh).join('\n'),
+  textEn: sentences.map(([, en]) => en).join('\n'),
+  chapter: ci + 1,
+}));
 
 export const DAODEJING_SETS = [
   {
     id: 'daodejing',
     title: '道德經 · 老子',
     titleEn: 'Dao De Jing · Laozi',
-    description: `《道德經》王弼本，中文一句一段，英譯為理雅各（James Legge，1891）。目前收錄第一至第${CN_NUM[CHAPTERS.length]}章。`,
+    description: `《道德經》王弼本，一章一段，中文逐句對照理雅各（James Legge，1891）英譯。目前收錄第一至第${CN_NUM[CHAPTERS.length]}章。`,
     language: 'cuv',
     sourceLang: 'zh',
     builtIn: true,
