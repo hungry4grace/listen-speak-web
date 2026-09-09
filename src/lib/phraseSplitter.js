@@ -28,11 +28,36 @@
 import segmentScripture from '../../vendor/semantic-scripture-segmenter/src/index.js';
 
 // Quote/bracket characters are stripped from phrase edges rather than split on,
-// so an opening 「 doesn't produce an empty leading block.
-const EDGE_TRIM = /^[「」『』《》〈〉“”"‘’'（）()【】[\]\s]+|[「」『』《》〈〉“”"‘’'（）()【】[\]\s]+$/gu;
+// so an opening 「 doesn't produce an empty leading block. A bracket is only
+// stripped when its partner is NOT inside the phrase: "(Conceived of as) having
+// no name" keeps its "(", while a 「 left dangling by a split still goes.
+const BRACKET_PAIRS = { '「': '」', '『': '』', '《': '》', '〈': '〉', '“': '”', '‘': '’', '（': '）', '(': ')', '【': '】', '[': ']' };
+const OPENERS = new Set(Object.keys(BRACKET_PAIRS));
+const CLOSERS = new Set(Object.values(BRACKET_PAIRS));
+const OPENER_OF = Object.fromEntries(Object.entries(BRACKET_PAIRS).map(([o, c]) => [c, o]));
+const PLAIN_EDGE = new Set(['"', "'"]);
 
 export function cleanPhraseBlock(phrase = '') {
-  return String(phrase || '').trim().replace(EDGE_TRIM, '').trim();
+  let s = String(phrase || '').trim();
+  // A phrase wrapped entirely in one pair — 「你們要靠著主」, (hello) — loses the pair.
+  while (s.length >= 2 && OPENERS.has(s[0]) && s[s.length - 1] === BRACKET_PAIRS[s[0]]) {
+    s = s.slice(1, -1).trim();
+  }
+  for (;;) {
+    const c = s[0];
+    if (!c) break;
+    if (/\s/u.test(c) || PLAIN_EDGE.has(c) || CLOSERS.has(c)) { s = s.slice(1); continue; }
+    if (OPENERS.has(c) && !s.slice(1).includes(BRACKET_PAIRS[c])) { s = s.slice(1); continue; }
+    break;
+  }
+  for (;;) {
+    const c = s[s.length - 1];
+    if (!c) break;
+    if (/\s/u.test(c) || PLAIN_EDGE.has(c) || OPENERS.has(c)) { s = s.slice(0, -1); continue; }
+    if (CLOSERS.has(c) && !s.slice(0, -1).includes(OPENER_OF[c])) { s = s.slice(0, -1); continue; }
+    break;
+  }
+  return s.trim();
 }
 
 // Keeps blocks that contain an actual letter/number/ideograph — filters out
