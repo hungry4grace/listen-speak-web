@@ -1245,6 +1245,26 @@ function getSecondaryPhrasesForIndex(primaryIndex, primaryLength, secondaryPhras
   }
 }
 
+// Line-aware pairing. Authors (and the built-in packs) write bilingual items
+// line by line — line N of the English is line N of the Chinese. When both
+// sides have the same number of lines, pair phrases WITHIN each line instead of
+// spreading the whole English text proportionally over the whole Chinese text,
+// which drifted by a phrase or two on longer passages. Returns one secondary
+// string per primary phrase, or null when the texts aren't line-parallel (the
+// caller then falls back to the proportional mapping).
+function alignSecondaryByLines(primaryText, secondaryText, primaryPhraseCount) {
+  const pLines = String(primaryText || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const sLines = String(secondaryText || '').split('\n').map(l => l.trim()).filter(Boolean);
+  if (pLines.length < 2 || pLines.length !== sLines.length) return null;
+  const out = [];
+  for (let k = 0; k < pLines.length; k++) {
+    const pp = splitVersePhrases(pLines[k], { semantic: false });
+    const sp = splitVersePhrases(sLines[k], { semantic: false });
+    for (let i = 0; i < pp.length; i++) out.push(getSecondaryPhrasesForIndex(i, pp.length, sp));
+  }
+  return out.length === primaryPhraseCount ? out : null;
+}
+
 // Labels in 聽&說 are free text (第 1 段, Part 1, 靜夜思 · 李白 ①…): key them by a
 // whitespace/dash-normalised, case-folded form so lookups tolerate spacing.
 function normalizeVerseReferenceKey(reference = '') {
@@ -2259,7 +2279,15 @@ function VerseSetContinuousRainPlayer({
   const secondaryAnnotation = annotationOf(swapped ? version : secondaryVersion);
   const activeSecondaryVersion = swapped ? version : secondaryVersion;
   const primaryPhrases = swapped ? effectiveSecondaryPhrases : phrases;
-  const secondaryDisplayPhrases = swapped ? phrases : effectiveSecondaryPhrases;
+  const lineAlignedSecondary = useMemo(() => {
+    const zhText = currentVerse?.text || '';
+    const otherText = secondaryVerse?.text || lookedUpText || '';
+    if (!otherText || !activeSecondaryVersion) return null;
+    return swapped
+      ? alignSecondaryByLines(otherText, zhText, effectiveSecondaryPhrases.length)
+      : alignSecondaryByLines(zhText, otherText, phrases.length);
+  }, [currentVerse, secondaryVerse, lookedUpText, swapped, phrases.length, effectiveSecondaryPhrases.length, activeSecondaryVersion]);
+  const secondaryDisplayPhrases = lineAlignedSecondary || (swapped ? phrases : effectiveSecondaryPhrases);
   // 對調時需要的第二語言文字是否已備妥(外部抓取可能還沒回來)→ 決定對調鈕可否按。
   const canSwapToSecondary = effectiveSecondaryPhrases.length > 0;
   const hasSecondaryPhrases = Boolean(activeSecondaryVersion && secondaryDisplayPhrases.length);
