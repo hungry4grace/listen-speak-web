@@ -6957,6 +6957,22 @@ export default function App() {
   const [multiplayerSelectedVerses, setMultiplayerSelectedVerses] = useState([]);
   const [randomPickCount, setRandomPickCount] = useState(1);
   const [continuousRainSet, setContinuousRainSet] = useState(null);
+  // The player holds a snapshot of the set's items. When the Traditional→
+  // Simplified converter finishes loading AFTER that snapshot was taken (a
+  // shared link opened in 简体 / 简体与拼音 loads the player before opencc-js
+  // arrives), re-pick every item's `text` for the current language so the
+  // Simplified reader doesn't stay on Traditional glyphs.
+  useEffect(() => {
+    if (!simplifiedReady) return;
+    setContinuousRainSet(prev => {
+      if (!prev || !Array.isArray(prev.verses) || !prev.verses.some(isBilingualItem)) return prev;
+      const loc = localizeSet({ verses: prev.verses }, version).verses;
+      const startVerse = prev.startVerse
+        ? (loc.find(v => v.reference === prev.startVerse.reference) || prev.startVerse)
+        : prev.startVerse;
+      return { ...prev, verses: loc, startVerse };
+    });
+  }, [simplifiedReady, version]);
   // 播放順序選擇 — holds the set while the user picks 隨機 or 按序.
   const [playOrderChooser, setPlayOrderChooser] = useState(null);
   const [playDurationChoice, setPlayDurationChoice] = useState(() => {
