@@ -81,7 +81,7 @@ const quillModules = {
       [{ 'header': [1, 2, 3, 4, false] }],
       ['bold', 'italic', 'underline', 'strike', 'blockquote'],
       [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      ['link', 'image', 'video'],
+      ['link', 'image'],
       ['clean']
     ],
     handlers: {
