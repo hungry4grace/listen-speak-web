@@ -1179,7 +1179,20 @@ export default class Server {
                }
                // Bind ownership on first publish; preserve it on updates.
                payload.ownerEmail = existing?.ownerEmail || requesterEmail || '';
-               await this.room.storage.put(`verseset:${payload.id}`, payload);
+               try {
+                  await this.room.storage.put(`verseset:${payload.id}`, payload);
+               } catch (putErr) {
+                  // Cloudflare DO storage caps a value at 128KB; an embedded
+                  // (base64) photo in the description is by far the most
+                  // common way to blow past that — surface a fixable reason
+                  // instead of the DB error a size-limit exception is meant
+                  // to look like.
+                  const msg = String(putErr?.message || putErr);
+                  if (/larger than|too large|131072/i.test(msg)) {
+                     return new Response(JSON.stringify({ error: '內容太大，無法儲存（可能是圖片直接嵌入了）。請改用圖片網址（例如上傳到 Imgur 後貼連結）而不是直接上傳照片檔案。' }), { status: 413, headers: corsHeaders });
+                  }
+                  throw putErr;
+               }
                return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
             } else if (request.method === "DELETE") {
                const { id, adminEmail, adminName } = await request.json();
@@ -2136,6 +2149,7 @@ export default class Server {
                return !!existing.authorName && existing.authorName === playerName;
             };
             let publishedSynced = 0;
+            const publishSyncFailures = [];
             for (const set of sets) {
                if (!set?.id || !set.isPublished) continue;
                const existing = await this.room.storage.get(`verseset:${set.id}`);
@@ -2144,15 +2158,23 @@ export default class Server {
                const tsNew = Date.parse(set.lastEditedAt || '') || 0;
                const tsOld = Date.parse(existing.lastEditedAt || '') || 0;
                if (tsNew > tsOld || (tsNew === tsOld && (set.verses || []).length > (existing.verses || []).length)) {
-                  await this.room.storage.put(`verseset:${set.id}`, {
-                     ...set,
-                     authorName: existing.authorName || set.authorName,
-                     ownerEmail: existing.ownerEmail || requesterEmail || '',
-                  });
-                  publishedSynced++;
+                  // A single oversized published set (e.g. an embedded base64
+                  // photo pushing it past the 128KB per-value cap) must not
+                  // fail this whole batch — every other set's private,
+                  // chunked copy already saved fine above this point.
+                  try {
+                     await this.room.storage.put(`verseset:${set.id}`, {
+                        ...set,
+                        authorName: existing.authorName || set.authorName,
+                        ownerEmail: existing.ownerEmail || requesterEmail || '',
+                     });
+                     publishedSynced++;
+                  } catch (syncErr) {
+                     publishSyncFailures.push({ setId: set.id, title: set.title, error: String(syncErr?.message || syncErr) });
+                  }
                }
             }
-            return new Response(JSON.stringify({ success: true, count: sets.length, chunks: totalChunks, publishedSynced }), { status: 200, headers: corsHeaders });
+            return new Response(JSON.stringify({ success: true, count: sets.length, chunks: totalChunks, publishedSynced, publishSyncFailures }), { status: 200, headers: corsHeaders });
          } catch (e) {
             return new Response(JSON.stringify({ error: 'Failed to save private sets', detail: String(e?.message || e) }), { status: 500, headers: corsHeaders });
          }

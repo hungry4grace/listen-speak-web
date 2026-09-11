@@ -62,14 +62,32 @@ import { bakeBeautifiedBlob } from './voiceBeautify';
 import { SET_BACKGROUND_THEMES, getSetBackgroundUrl, getSetBackgroundVideoUrl } from './setBackgrounds';
 import QrScanner from 'qr-scanner';
 
+// Quill's default image button opens a file picker and embeds the photo as a
+// base64 data URI directly in the saved HTML — a single normal phone photo
+// easily exceeds Cloudflare Durable Object storage's 128KB per-value limit
+// and the whole set fails to save with a DB error. Prompting for an already-
+// hosted image URL instead keeps the saved value tiny (just the URL string).
+function quillImageUrlHandler() {
+  const url = window.prompt('貼上圖片網址 (Paste an image URL):');
+  if (!url) return;
+  const range = this.quill.getSelection(true) || { index: this.quill.getLength() };
+  this.quill.insertEmbed(range.index, 'image', url, 'user');
+  this.quill.setSelection(range.index + 1);
+}
+
 const quillModules = {
-  toolbar: [
-    [{ 'header': [1, 2, 3, 4, false] }],
-    ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-    ['link', 'image', 'video'],
-    ['clean']
-  ],
+  toolbar: {
+    container: [
+      [{ 'header': [1, 2, 3, 4, false] }],
+      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      ['link', 'image', 'video'],
+      ['clean']
+    ],
+    handlers: {
+      image: quillImageUrlHandler,
+    },
+  },
 };
 
 let audioCtx = null;

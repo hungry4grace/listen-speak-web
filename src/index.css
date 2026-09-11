@@ -267,6 +267,15 @@ textarea {
   font-size: 20px !important;
 }
 
+/* Embedded images (via the image-URL toolbar button) must scale down to fit
+   the viewport — without this an author's full-resolution photo overflows
+   narrow phone/tablet screens and only part of it is visible. */
+.ql-editor img,
+.ql-editor-content img {
+  max-width: 100%;
+  height: auto;
+}
+
 /* Fancy Tooltips */
 .fancy-tooltip-container {
   position: relative;
