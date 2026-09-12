@@ -1797,6 +1797,10 @@ function VerseSetContinuousRainPlayer({
   // Scoped to this playback (rides on the set object), so a later non-shared
   // play naturally clears it. See the /lc → listenSet deep-link handler.
   const sharedVoiceOwner = verseSet?.sharedVoiceOwner || null;
+  // vv= from the same link: the exact recording that was shared. Private
+  // recordings are unlisted rather than locked, so quoting their voiceId is
+  // what lets the recipient hear one the picker would never show them.
+  const sharedVoiceId = verseSet?.sharedVoiceId || null;
   // Play-time voice source overrides (from the 播放方式 picker). forceTTS =
   // computer voice only (skip every recording); forceOwnerLayer = the set
   // author's recording only (ignore the listener's own personal voice). A
@@ -1908,10 +1912,16 @@ function VerseSetContinuousRainPlayer({
     const buckets = personalVoiceSetId !== PERSONAL_LOOSE_SET_ID
       ? [PERSONAL_LOOSE_SET_ID, personalVoiceSetId]   // loose first, real set overwrites
       : [PERSONAL_LOOSE_SET_ID];
-    const loadMerged = async (owner) => {
+    // The server hides an owner's private recordings from everyone else, so
+    // say who's asking: `email` when loading my own (otherwise I'd lose my own
+    // unshared readings), and the share link's voiceId when loading someone
+    // else's — that one id is what makes a private recording playable for the
+    // person it was handed to, without listing it for anyone else.
+    const loadMerged = async (owner, { own = false } = {}) => {
       const out = {};
+      const auth = own ? { email: userEmail } : (sharedVoiceId ? { unlisted: sharedVoiceId } : undefined);
       for (const bucket of buckets) {
-        const res = await userVoiceApi.getAll(bucket, owner).catch(() => null);
+        const res = await userVoiceApi.getAll(bucket, owner, auth).catch(() => null);
         if (res?.voices) {
           for (const [ref, meta] of Object.entries(res.voices)) {
             out[ref] = { ...meta, voiceBucket: bucket };
@@ -1926,7 +1936,7 @@ function VerseSetContinuousRainPlayer({
         if (cancelled) return;
         myOwnerIdRef.current = mine;
         if (mine) {
-          const merged = await loadMerged(mine);
+          const merged = await loadMerged(mine, { own: true });
           if (!cancelled) personalVoicesRef.current = merged; // keep for badges
         }
         // Picker forced 電腦語音 or 作者錄音 → leave override empty: forceTTS is
@@ -1940,7 +1950,7 @@ function VerseSetContinuousRainPlayer({
           if (activeOwner && activeOwner === mine) {
             overrideVoicesRef.current = personalVoicesRef.current;
           } else if (activeOwner) {
-            const merged = await loadMerged(activeOwner);
+            const merged = await loadMerged(activeOwner, { own: false });
             if (!cancelled) overrideVoicesRef.current = merged;
           }
         }
@@ -1949,7 +1959,7 @@ function VerseSetContinuousRainPlayer({
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personalVoiceSetId, userEmail, sharedVoiceOwner, forceTTS, forceOwnerLayer]);
+  }, [personalVoiceSetId, userEmail, sharedVoiceOwner, sharedVoiceId, forceTTS, forceOwnerLayer]);
 
   // Record / re-record my voice for the current verse, then refresh caches.
   const recordedByName = playerName || (userEmail || '').split('@')[0] || 'Anonymous';
@@ -2031,8 +2041,36 @@ function VerseSetContinuousRainPlayer({
         overrideVoicesRef.current = nextOverride;
       }
       bumpPersonalVoices();
+      // Same reason saving does this: the set-detail list caches which verses
+      // have recordings, so without it a deleted recording keeps its ⭐ and its
+      // 🎙️ badge until a full page reload.
+      onVoiceRecorded?.();
     } catch (e) {
       console.error('personal voice delete failed', e);
+    }
+    setPersonalBusy(false);
+  };
+  // Flip my own recording on this verse between listed (public) and unlisted.
+  const toggleMyVoicePublic = async (ref) => {
+    if (!userEmail || !ref) return;
+    const rec = personalVoicesRef.current?.[ref];
+    if (!rec) return;
+    const next = rec.public === false; // currently private → make it public
+    setPersonalBusy(true);
+    try {
+      const bucket = rec.voiceBucket || personalVoiceSetId;
+      await userVoiceApi.setVisibility(userEmail, bucket, ref, next);
+      personalVoicesRef.current = { ...personalVoicesRef.current, [ref]: { ...rec, public: next } };
+      if (!sharedVoiceOwner || sharedVoiceOwner === myOwnerIdRef.current) {
+        const over = overrideVoicesRef.current?.[ref];
+        if (over) overrideVoicesRef.current = { ...overrideVoicesRef.current, [ref]: { ...over, public: next } };
+      }
+      bumpPersonalVoices();
+      // Others' view of this set changed (the ⭐ and the picker), so let the
+      // set-detail list refetch when the listener goes back to it.
+      onVoiceRecorded?.();
+    } catch (e) {
+      console.error('personal voice visibility toggle failed', e);
     }
     setPersonalBusy(false);
   };
@@ -2090,26 +2128,33 @@ function VerseSetContinuousRainPlayer({
   // share button (so a link carries the exact voice the sharer is hearing). Must
   // mirror playVerse's default priority: my/shared override › newest public human
   // (latestVoicesRef) › author layer › TTS (null). A live manual switch wins.
-  const currentTargetOwnerId = () => {
+  // Returns { ownerId, voiceId, personal } for the voice that would play now.
+  // `voiceId` is only meaningful for the personal layer — that's the one with a
+  // public/private flag, so it's the only one a share link needs to quote in
+  // order to stay playable if the recording is (or later becomes) unlisted.
+  const currentTargetVoice = () => {
     const ref = currentVerse.reference;
     const m = manualVoiceRef.current;
     if (m) {
-      if (m.type === 'tts' || m.type === 'silent') return null;
-      if (m.type === 'owner') return verseVoicesRef.current?.[ref]?.byOwnerId || null;
-      return m.ownerId || null;
+      if (m.type === 'tts' || m.type === 'silent') return { ownerId: null, voiceId: null, personal: false };
+      if (m.type === 'owner') return { ownerId: verseVoicesRef.current?.[ref]?.byOwnerId || null, voiceId: null, personal: false };
+      return { ownerId: m.ownerId || null, voiceId: m.voices?.[ref]?.voiceId || null, personal: true };
     }
-    if (forceTTSRef.current) return null;
-    if (overrideVoicesRef.current?.[ref]) return sharedVoiceOwner || myOwnerIdRef.current || null;
+    if (forceTTSRef.current) return { ownerId: null, voiceId: null, personal: false };
+    const over = overrideVoicesRef.current?.[ref];
+    if (over) return { ownerId: sharedVoiceOwner || myOwnerIdRef.current || null, voiceId: over.voiceId || null, personal: true };
     const latest = latestVoicesRef.current?.[ref];
     if (latest?.voiceId) {
-      if (latest.ownerId) return latest.ownerId;
+      const author = verseVoicesRef.current?.[ref];
+      const isAuthorLayer = author?.voiceId === latest.voiceId;
+      if (latest.ownerId) return { ownerId: latest.ownerId, voiceId: isAuthorLayer ? null : latest.voiceId, personal: !isAuthorLayer };
       // Older author-layer recordings can arrive without an ownerId from
       // /voice-latest; the author layer carries the backfilled byOwnerId.
-      const author = verseVoicesRef.current?.[ref];
-      return (author?.voiceId === latest.voiceId && author?.byOwnerId) || null;
+      return { ownerId: (isAuthorLayer && author?.byOwnerId) || null, voiceId: null, personal: false };
     }
-    return verseVoicesRef.current?.[ref]?.byOwnerId || null;
+    return { ownerId: verseVoicesRef.current?.[ref]?.byOwnerId || null, voiceId: null, personal: false };
   };
+  const currentTargetOwnerId = () => currentTargetVoice().ownerId;
   const openCommentsForCurrent = () => {
     const ownerId = currentTargetOwnerId();
     if (!ownerId || !voiceSetId) return;
@@ -3206,6 +3251,17 @@ function VerseSetContinuousRainPlayer({
                 <span style={{ color: '#000000', fontWeight: 600, textShadow: '0.06em 0.08em 2px rgba(255, 255, 255, 0.95), 0.12em 0.16em 8px rgba(255, 255, 255, 0.65)' }}>🎙️ {t('我的錄音', 'My recording')}</span>
                 <button
                   type="button"
+                  onClick={() => toggleMyVoicePublic(currentVerse.reference)}
+                  disabled={personalBusy}
+                  title={myVoiceForCurrent.public === false
+                    ? t('不公開:只有你聽得到(拿到分享連結的人也可以)。點一下改為公開。', 'Private: only you can hear it (plus anyone you send the link to). Tap to make it public.')
+                    : t('已公開:別人在這個內容集的語音選單裡可以選擇聽你的聲音。點一下改為不公開。', 'Public: others can pick your voice in this set. Tap to make it private.')}
+                  style={{ marginLeft: 8, background: 'transparent', border: `1px solid ${myVoiceForCurrent.public === false ? 'rgba(100,116,139,0.8)' : 'rgba(22,163,74,0.8)'}`, color: myVoiceForCurrent.public === false ? '#475569' : '#16a34a', borderRadius: 6, padding: '1px 8px', cursor: personalBusy ? 'default' : 'pointer', fontSize: '0.75rem', fontWeight: 600, opacity: personalBusy ? 0.5 : 1, textShadow: '0.06em 0.08em 2px rgba(255, 255, 255, 0.85)' }}
+                >
+                  {myVoiceForCurrent.public === false ? `🔒 ${t('不公開', 'Private')}` : `🌐 ${t('已公開', 'Public')}`}
+                </button>
+                <button
+                  type="button"
                   onClick={() => deleteMyVoice(currentVerse.reference)}
                   disabled={personalBusy}
                   style={{ marginLeft: 8, background: 'transparent', border: '1px solid rgba(220,38,38,0.7)', color: '#dc2626', borderRadius: 6, padding: '1px 8px', cursor: personalBusy ? 'default' : 'pointer', fontSize: '0.75rem', fontWeight: 600, opacity: personalBusy ? 0.5 : 1, textShadow: '0.06em 0.08em 2px rgba(255, 255, 255, 0.85)' }}
@@ -3344,8 +3400,11 @@ function VerseSetContinuousRainPlayer({
                 // straight into that recording. null = TTS → recipient gets the
                 // set's own default (newest public voice). currentTargetOwnerId
                 // mirrors playVerse's live selection, so it already accounts for
-                // "my own wins" and the newest-public-voice default.
-                onShareVerse(currentVerse, { voiceOwner: currentTargetOwnerId() });
+                // "my own wins" and the newest-public-voice default. The voiceId
+                // rides along for personal recordings so the link keeps working
+                // even if that recording is (or later becomes) unlisted.
+                const tv = currentTargetVoice();
+                onShareVerse(currentVerse, { voiceOwner: tv.ownerId, voiceId: tv.personal ? tv.voiceId : null });
               }}
             >
               <Share2 size={22} />
@@ -5896,11 +5955,18 @@ export default function App() {
   // ⭐ shows even when the recording is someone else's — not just the viewer's
   // own or the author's. A Set of reference strings.
   const [currentSetVoiceRefs, setCurrentSetVoiceRefs] = useState(() => new Set());
+  // MY OWN recordings in this set, keyed by reference — separate from the two
+  // above because ⭐ answers "anyone recorded here" while this answers "I
+  // recorded here, and is it public", which is what the per-row mic badge needs.
+  // Includes private ones (the request identifies us), which no other listing
+  // does.
+  const [myVoicesInSet, setMyVoicesInSet] = useState({});
   const [voiceRefreshTick, setVoiceRefreshTick] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setCurrentSetVoices({});
     setCurrentSetVoiceRefs(new Set());
+    setMyVoicesInSet({});
     const id = currentSet?.id;
     if (!id) return undefined;
     setVoiceApi.getAll(id)
@@ -5909,8 +5975,47 @@ export default function App() {
     userVoiceApi.getVoiceRefs(id)
       .then(res => { if (!cancelled && Array.isArray(res?.refs)) setCurrentSetVoiceRefs(new Set(res.refs)); })
       .catch(() => { /* union is best-effort — the author-only ⭐ still shows */ });
+    if (userEmail) {
+      (async () => {
+        try {
+          // Resolve the owner id here rather than reading myVoiceOwnerId state:
+          // that's declared further down this component, so depending on it
+          // would throw at render.
+          const mine = await voiceOwnerId(userEmail);
+          if (cancelled || !mine) return;
+          // Both buckets, same as the player: a recording made on a loose verse
+          // (random/search) shows up inside a real set too, and the badge has to
+          // agree with what the player will actually play.
+          const buckets = id !== PERSONAL_LOOSE_SET_ID ? [PERSONAL_LOOSE_SET_ID, id] : [PERSONAL_LOOSE_SET_ID];
+          const out = {};
+          for (const bucket of buckets) {
+            const res = await userVoiceApi.getAll(bucket, mine, { email: userEmail }).catch(() => null);
+            if (res?.voices) for (const [ref, meta] of Object.entries(res.voices)) out[ref] = { ...meta, voiceBucket: bucket };
+          }
+          if (!cancelled) setMyVoicesInSet(out);
+        } catch { /* the badge is optional */ }
+      })();
+    }
     return () => { cancelled = true; };
-  }, [currentSet?.id, voiceRefreshTick]);
+  }, [currentSet?.id, voiceRefreshTick, userEmail]);
+  // Toggle one of my own recordings listed/unlisted straight from the verse row.
+  const [voiceVisibilityBusy, setVoiceVisibilityBusy] = useState('');
+  const toggleMyVerseVoicePublic = React.useCallback(async (reference) => {
+    const rec = myVoicesInSet[reference];
+    if (!userEmail || !rec || voiceVisibilityBusy) return;
+    const next = rec.public === false;
+    setVoiceVisibilityBusy(reference);
+    try {
+      await userVoiceApi.setVisibility(userEmail, rec.voiceBucket || currentSet?.id, reference, next);
+      setMyVoicesInSet(prev => ({ ...prev, [reference]: { ...prev[reference], public: next } }));
+      // The ⭐ (and everyone else's picker) reflects public recordings only, so
+      // refetch the shared listings too.
+      setVoiceRefreshTick(x => x + 1);
+    } catch (e) {
+      console.error('verse voice visibility toggle failed', e);
+    }
+    setVoiceVisibilityBusy('');
+  }, [myVoicesInSet, userEmail, voiceVisibilityBusy, currentSet?.id]);
   const getVerseSetAuthorName = React.useCallback((set) => {
     if (!set) return "";
     if (set.authorName && set.authorName !== "Anonymous") return set.authorName;
@@ -7697,6 +7802,7 @@ export default function App() {
         setSelectedSetId(foundSet.id);
         setMainTab('versesets');
         const voParam = params.get('vo');
+        const vvParam = params.get('vv');
         setContinuousRainSet({
           id: foundSet.id,
           title: foundSet.title,
@@ -7708,6 +7814,9 @@ export default function App() {
           voiceSetId: foundSet.voiceSetId || null,
           // vo= → play the sender's personal voice over the owner's / TTS.
           sharedVoiceOwner: /^[a-f0-9]{16}$/.test(String(voParam || '')) ? voParam : null,
+          // vv= → the exact recording that was shared, which is what unlocks it
+          // when the sender keeps it unlisted (it's hidden from all listings).
+          sharedVoiceId: /^v_[A-Za-z0-9]{6,20}$/.test(String(vvParam || '')) ? vvParam : null,
           background: foundSet.background || '',
           backgroundMime: foundSet.backgroundMime || '',
           bgMusic: foundSet.bgMusic || '',
@@ -9695,6 +9804,12 @@ const zhcnDict = {
             onSelectDailyVerse={() => { setContinuousRainSet(null); setMainTab('daily_verse'); }}
             onStop={() => {
               setContinuousRainSet(null);
+              // Coming back to the verse list: re-read which verses have
+              // recordings. The recorder/delete/visibility handlers already
+              // report their own changes, but this also picks up recordings
+              // other people made while this page sat open — and means the
+              // badges can't drift out of sync if some future path forgets.
+              setVoiceRefreshTick(x => x + 1);
             }}
             onSelectTopicSet={(set) => {
               setSelectedSetId(set.id);
@@ -9732,6 +9847,10 @@ const zhcnDict = {
                 // vo = opaque voice-owner id → recipient hears MY personal
                 // recording for this verse (my voice › set owner › TTS).
                 ...(shareOpts?.voiceOwner ? { vo: shareOpts.voiceOwner } : {}),
+                // vv = that recording's voiceId. Unlisted recordings are hidden
+                // from every listing, so the link has to name the recording
+                // itself for the recipient to be allowed to hear it.
+                ...(shareOpts?.voiceId ? { vv: shareOpts.voiceId } : {}),
                 version,
               });
               openListeningShare(link, `${fullSet.title || continuousRainSet.title || t('內容集', 'Collection')} · ${verse.reference}`);
@@ -9807,7 +9926,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.6
+                    v0.1.7
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -12154,6 +12273,35 @@ const zhcnDict = {
                                           <span style={{ position: 'absolute', top: '-7px', right: '-7px', fontSize: '0.8rem', filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.35))' }} aria-label={t('有人聲錄音', 'Voice recording available')}>⭐</span>
                                         )}
                                       </button>
+                                      {/* My OWN recording on this verse. The ⭐ above can't say this —
+                                          it lights up for anyone's recording — so a listener couldn't
+                                          tell their own reading from a stranger's, let alone whether
+                                          theirs was shared. Green = listed for everyone, grey+🔒 =
+                                          unlisted; tapping flips it. Deliberately a sibling of the play
+                                          button rather than a badge inside it, so the tap can't also
+                                          start playback. */}
+                                      {myVoicesInSet[v.reference] && (() => {
+                                        const isPublic = myVoicesInSet[v.reference].public !== false;
+                                        const busy = voiceVisibilityBusy === v.reference;
+                                        return (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); toggleMyVerseVoicePublic(v.reference); }}
+                                            disabled={busy}
+                                            aria-label={isPublic ? t('我的錄音（已公開）', 'My recording (public)') : t('我的錄音（不公開）', 'My recording (private)')}
+                                            title={isPublic
+                                              ? t('我的錄音（已公開）· 點一下改為不公開', 'My recording (public) · tap to make it private')
+                                              : t('我的錄音（不公開）· 點一下改為公開', 'My recording (private) · tap to make it public')}
+                                            style={{ position: 'relative', backgroundColor: isPublic ? '#16a34a' : '#64748b', color: 'white', border: 'none', borderRadius: '6px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.5 : 1, transition: 'transform 0.1s' }}
+                                            onMouseOver={(e) => { if (!busy) e.currentTarget.style.transform = 'scale(1.1)'; }}
+                                            onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                          >
+                                            <Mic size={14} />
+                                            {!isPublic && (
+                                              <span style={{ position: 'absolute', top: '-6px', right: '-6px', fontSize: '0.62rem', filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.35))' }}>🔒</span>
+                                            )}
+                                          </button>
+                                        );
+                                      })()}
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();

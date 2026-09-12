@@ -155,10 +155,18 @@ export const userVoiceApi = {
   register: (email, setId, reference, { voiceId, voiceMime, voiceDur, recordedBy, public: isPublic }) =>
     jpost('/sets/user-verse-voice/set', { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy, public: isPublic }),
   // { voices: { [reference]: meta } } — for one owner (self, or a share's vo=).
-  getAll: (setId, owner) =>
-    jget(`/sets/user-verse-voices?setId=${encodeURIComponent(setId)}&owner=${encodeURIComponent(owner)}`),
+  // The server hides that owner's private recordings unless you identify
+  // yourself as them (`email`), or quote one recording's voiceId from a share
+  // link (`unlisted`) — that's what keeps a private recording's link playable.
+  getAll: (setId, owner, { email, unlisted } = {}) =>
+    jget(`/sets/user-verse-voices?setId=${encodeURIComponent(setId)}&owner=${encodeURIComponent(owner)}`
+      + (email ? `&email=${encodeURIComponent(email)}` : '')
+      + (unlisted ? `&unlisted=${encodeURIComponent(unlisted)}` : '')),
   remove: (email, setId, reference) =>
     jpost('/sets/user-verse-voice/delete', { email, setId, reference }),
+  // Flip one of my own recordings between listed (public) and unlisted.
+  setVisibility: (email, setId, reference, isPublic) =>
+    jpost('/sets/user-verse-voice/visibility', { email, setId, reference, public: isPublic }),
   // Play-time picker: who has shared recordings for this set.
   // { contributors: [{ ownerId, recordedBy, count }] }.
   getContributors: (setId) =>

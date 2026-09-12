@@ -7,6 +7,41 @@ async function voiceOwnerId(email) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
+// Who may see one personal recording. Three ways in:
+//   • it's public — note the polarity: recordings written before the flag
+//     existed have no `public` field at all and must stay visible, so this
+//     asks `!== false` rather than `=== true`;
+//   • the requester owns it (they proved the email that hashes to ownerId);
+//   • the requester quoted its voiceId. A private recording is *unlisted*,
+//     not access-controlled: the owner can hand someone a share link and the
+//     random voiceId in it acts as the capability.
+export function isUserVoiceVisible(meta, requesterOwnerId, ownerId, unlistedVoiceId) {
+  if (!meta) return false;
+  if (meta.public !== false) return true;
+  if (requesterOwnerId && ownerId && requesterOwnerId === ownerId) return true;
+  if (unlistedVoiceId && meta.voiceId && meta.voiceId === unlistedVoiceId) return true;
+  return false;
+}
+
+// Rebuild one owner's entry in set-voice-index from their actual recordings.
+// The index drives every "who recorded for this set" listing, and it only ever
+// counts PUBLIC recordings — so a private-only recorder must not appear, and
+// flipping a last public recording to private has to drop them back out.
+// Recomputing from the metas (rather than ±1 bookkeeping) also heals the drift
+// left by the old code, which incremented only on public writes but
+// decremented on every delete. Returns null when nothing public is left.
+export function ownerIndexEntryFor(prevEntry, metas, recordedBy, nowIso) {
+  const publicCount = (metas || []).filter((m) => m && m.public !== false).length;
+  if (publicCount <= 0) return null;
+  const prev = prevEntry || {};
+  return {
+    recordedBy: recordedBy || prev.recordedBy || '',
+    count: publicCount,
+    updatedAt: nowIso || new Date().toISOString(),
+    hidden: prev.hidden === true,
+  };
+}
+
 // ─── Password storage ────────────────────────────────────────────────────
 // Accounts used to store the password in cleartext and /forgot-password
 // emailed it back. That meant anyone with storage access — or any future
@@ -516,6 +551,35 @@ export default class Server {
       }
     } catch (e) {
       console.error("migratePlayerName failed", oldName, "->", newName, e);
+    }
+  }
+
+  // Re-derive one owner's set-voice-index entry from their stored recordings.
+  // Called from every personal-voice write (register / visibility / delete):
+  // the index is what /sets/voice-contributors, /voice-refs and /voice-latest
+  // walk, so an owner whose recordings are all private has to be absent from
+  // it, and their first public recording has to put them back in.
+  async syncVoiceIndexOwner(setId, ownerId, recordedBy, nowIso) {
+    try {
+      const idxKey = `set-voice-index:${String(setId)}`;
+      const mine = await this.room.storage.list({ prefix: `user-verse-voice:${ownerId}:${String(setId)}:` });
+      const metas = Array.from(mine.values());
+      const idx = (await this.room.storage.get(idxKey)) || {};
+      const entry = ownerIndexEntryFor(idx[ownerId], metas, recordedBy, nowIso);
+      if (entry) idx[ownerId] = entry;
+      else delete idx[ownerId];
+      // Cap the index so a runaway set can't blow the 128KB per-key limit.
+      const owners = Object.keys(idx);
+      if (owners.length > 60) {
+        owners
+          .sort((a, b) => (idx[a].updatedAt < idx[b].updatedAt ? -1 : 1))
+          .slice(0, owners.length - 60)
+          .forEach((o) => { if (o !== ownerId) delete idx[o]; });
+      }
+      if (Object.keys(idx).length === 0) await this.room.storage.delete(idxKey);
+      else await this.room.storage.put(idxKey, idx);
+    } catch (e) {
+      console.error('syncVoiceIndexOwner failed', setId, ownerId, e);
     }
   }
 
@@ -1505,49 +1569,45 @@ export default class Server {
                at: new Date().toISOString(),
             };
             const key = `user-verse-voice:${ownerId}:${String(setId)}:${refKey}`;
-            const wasNew = !(await this.room.storage.get(key));
             await this.room.storage.put(key, meta);
-            // Maintain the contributor index (best-effort; the picker tolerates
-            // stale entries by skipping any whose audio can't be fetched).
-            if (isPublic) {
-               const idxKey = `set-voice-index:${String(setId)}`;
-               const idx = (await this.room.storage.get(idxKey)) || {};
-               const prev = idx[ownerId] || { count: 0, hidden: false };
-               idx[ownerId] = {
-                  recordedBy: meta.recordedBy || prev.recordedBy || '',
-                  count: prev.count + (wasNew ? 1 : 0),
-                  updatedAt: meta.at,
-                  hidden: prev.hidden === true,
-               };
-               // Cap the index so a runaway set can't blow the 128KB key limit.
-               const owners = Object.keys(idx);
-               if (owners.length > 60) {
-                  owners
-                     .sort((a, b) => (idx[a].updatedAt < idx[b].updatedAt ? -1 : 1))
-                     .slice(0, owners.length - 60)
-                     .forEach((o) => { if (o !== ownerId) delete idx[o]; });
-               }
-               await this.room.storage.put(idxKey, idx);
-            }
+            // Recompute this owner's index entry from their actual recordings —
+            // runs on every write, not just public ones, so re-recording a
+            // public reading as private also takes them back out of the picker.
+            await this.syncVoiceIndexOwner(setId, ownerId, meta.recordedBy, meta.at);
             return new Response(JSON.stringify({ success: true, ownerId, verseVoice: meta }), { status: 200, headers: corsHeaders });
          } catch {
             return new Response(JSON.stringify({ error: 'Failed to save personal verse voice' }), { status: 500, headers: corsHeaders });
          }
       }
 
-      // GET /sets/user-verse-voices?setId=<setId>&owner=<ownerId> — a single
-      // user's recordings for a set, as { voices: { [reference]: meta } }.
+      // GET /sets/user-verse-voices?setId=<setId>&owner=<ownerId>[&email=][&unlisted=<voiceId>]
+      // A single user's recordings for a set, as { voices: { [reference]: meta } }.
       // owner is the opaque id (from a share link, or the listener's own).
+      //
+      // Private recordings are filtered out here, and this is the ONLY place
+      // that needs to do it: every voice picker reaches a contributor's
+      // recordings through this route carrying just their ownerId, which is
+      // public (/sets/voice-contributors hands it out, share links carry it as
+      // vo=). Filtering client-side would leave the API itself wide open, and
+      // would still leak through the picker path that preloads a whole set.
+      //   email    — the requester proving ownership, so you always see your own.
+      //   unlisted — one voiceId quoted from a share link, so a private
+      //              recording stays playable for whoever was given the link.
       if (url.pathname.endsWith('/sets/user-verse-voices') && request.method === 'GET') {
          try {
             const setId = url.searchParams.get('setId');
             const owner = url.searchParams.get('owner');
+            const email = url.searchParams.get('email');
+            const unlisted = url.searchParams.get('unlisted');
             if (!setId || !owner) return new Response(JSON.stringify({ error: 'setId, owner required' }), { status: 400, headers: corsHeaders });
+            const requesterOwnerId = email ? await voiceOwnerId(email) : null;
             const prefix = `user-verse-voice:${owner}:${setId}:`;
             const map = await this.room.storage.list({ prefix });
             const voices = {};
             for (const [, meta] of map.entries()) {
-               if (meta?.reference) voices[meta.reference] = meta;
+               if (!meta?.reference) continue;
+               if (!isUserVoiceVisible(meta, requesterOwnerId, owner, unlisted)) continue;
+               voices[meta.reference] = meta;
             }
             return new Response(JSON.stringify({ success: true, voices }), { status: 200, headers: corsHeaders });
          } catch {
@@ -1572,21 +1632,37 @@ export default class Server {
                for (const k of chunks.keys()) await this.room.storage.delete(k);
             }
             await this.room.storage.delete(key);
-            // Decrement the contributor index; drop the owner entry at zero.
-            if (meta) {
-               const idxKey = `set-voice-index:${String(setId)}`;
-               const idx = await this.room.storage.get(idxKey);
-               if (idx && idx[ownerId]) {
-                  const c = (idx[ownerId].count || 1) - 1;
-                  if (c <= 0) delete idx[ownerId];
-                  else idx[ownerId] = { ...idx[ownerId], count: c, updatedAt: new Date().toISOString() };
-                  if (Object.keys(idx).length === 0) await this.room.storage.delete(idxKey);
-                  else await this.room.storage.put(idxKey, idx);
-               }
-            }
+            // Recompute rather than decrement: the old ±1 bookkeeping counted
+            // only public writes but subtracted on every delete, so counts drifted.
+            if (meta) await this.syncVoiceIndexOwner(setId, ownerId, meta.recordedBy);
             return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
          } catch {
             return new Response(JSON.stringify({ error: 'Failed to delete personal verse voice' }), { status: 500, headers: corsHeaders });
+         }
+      }
+
+      // POST /sets/user-verse-voice/visibility — { email, setId, reference, public }
+      // Flip one of the caller's own recordings between public (listed in the
+      // set's voice picker) and private (unlisted — still theirs, still
+      // playable by anyone holding a share link). Auth = the same rule as
+      // delete: the email must hash to the ownerId in the key.
+      if (url.pathname.endsWith('/sets/user-verse-voice/visibility') && request.method === 'POST') {
+         try {
+            const body = await request.json();
+            const { email, setId, reference } = body;
+            if (!email || !setId || !reference) return new Response(JSON.stringify({ error: 'email, setId, reference required' }), { status: 400, headers: corsHeaders });
+            if (typeof body.public !== 'boolean') return new Response(JSON.stringify({ error: 'public must be a boolean' }), { status: 400, headers: corsHeaders });
+            const ownerId = await voiceOwnerId(email);
+            const refKey = encodeURIComponent(String(reference).trim().slice(0, 60));
+            const key = `user-verse-voice:${ownerId}:${String(setId)}:${refKey}`;
+            const meta = await this.room.storage.get(key);
+            if (!meta) return new Response(JSON.stringify({ error: 'No recording of yours on this verse' }), { status: 404, headers: corsHeaders });
+            const next = { ...meta, public: body.public };
+            await this.room.storage.put(key, next);
+            await this.syncVoiceIndexOwner(setId, ownerId, next.recordedBy);
+            return new Response(JSON.stringify({ success: true, verseVoice: next }), { status: 200, headers: corsHeaders });
+         } catch {
+            return new Response(JSON.stringify({ error: 'Failed to update recording visibility' }), { status: 500, headers: corsHeaders });
          }
       }
 

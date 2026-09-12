@@ -95,6 +95,9 @@ export default async function handler(req, res) {
   // vo = opaque voice-owner id → recipient hears the sender's personal
   // recording for this verse (their voice › set owner › TTS).
   if (/^[a-f0-9]{16}$/.test(String(q.vo || ''))) dest.searchParams.set('vo', String(q.vo));
+  // vv = that recording's voiceId. An unlisted recording is hidden from every
+  // listing, so naming it here is what lets the recipient play it.
+  if (/^v_[A-Za-z0-9]{6,20}$/.test(String(q.vv || ''))) dest.searchParams.set('vv', String(q.vv));
   // Carry the language through to the SPA so the app's own directions
   // (Start Listening / Stop / …) render in the language the link was sent in.
   if (q.lang) dest.searchParams.set('lang', lang);

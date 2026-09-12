@@ -14,10 +14,13 @@ import { useEffect, useRef, useState } from 'react';
 //                in the BACKGROUND so the creator can immediately record next.
 //   onCancel   — close without saving
 //   onDone     — called right after handing the clip off (closes the modal)
-//   showShareToggle — when true, offers a "分享給大家" checkbox (default on) and
+//   showShareToggle — when true, offers a "公開分享" checkbox (default OFF) and
 //                passes its value as `public` to onUpload. Used on the personal
 //                path (recording on someone else's set) so a reading can opt into
-//                the set's shared-voice picker.
+//                the set's shared-voice picker. Opt-in rather than opt-out: your
+//                own voice shouldn't reach strangers because you missed a
+//                checkbox, and an unshared recording is still yours to keep and
+//                to hand out by link.
 export default function VerseVoiceRecorder({ t, reference, verseText, onUpload, onCancel, onDone, showShareToggle = false, zIndex = 1400 }) {
   // No user-facing duration limit — long recordings are chunked
   // automatically at upload (backend allows ≈27 min). This ceiling is a
@@ -27,7 +30,7 @@ export default function VerseVoiceRecorder({ t, reference, verseText, onUpload, 
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
   const [previewPlaying, setPreviewPlaying] = useState(false);
-  const [sharePublic, setSharePublic] = useState(true);
+  const [sharePublic, setSharePublic] = useState(false);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
@@ -406,12 +409,14 @@ export default function VerseVoiceRecorder({ t, reference, verseText, onUpload, 
               </div>
             ) : (deviceSelect || inputMonitor())}
             {showShareToggle && (
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, textAlign: 'left', margin: '0 0 0.9rem', cursor: 'pointer', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '0.55rem 0.7rem' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, textAlign: 'left', margin: '0 0 0.9rem', cursor: 'pointer', background: sharePublic ? '#f0fdf4' : '#f8fafc', border: `1px solid ${sharePublic ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 8, padding: '0.55rem 0.7rem' }}>
                 <input type="checkbox" checked={sharePublic} onChange={(e) => setSharePublic(e.target.checked)} style={{ marginTop: 3, width: 18, height: 18, accentColor: '#16a34a', flexShrink: 0 }} />
-                <span style={{ fontSize: '0.85rem', color: '#166534', lineHeight: 1.45 }}>
-                  <b>{t('分享給大家', 'Share with everyone')}</b>
-                  <span style={{ display: 'block', color: '#15803d', fontSize: '0.78rem' }}>
-                    {t('你的錄音會成為這個經文組的公開語音選項,別人播放時可以選擇聽你的聲音。', 'Your recording becomes a public voice option for this set — others can choose to hear your voice when they play it.')}
+                <span style={{ fontSize: '0.85rem', color: sharePublic ? '#166534' : '#334155', lineHeight: 1.45 }}>
+                  <b>{t('公開分享給大家', 'Share publicly')}</b>
+                  <span style={{ display: 'block', color: sharePublic ? '#15803d' : '#64748b', fontSize: '0.78rem' }}>
+                    {sharePublic
+                      ? t('你的錄音會成為這個內容集的公開語音選項,別人播放時可以選擇聽你的聲音。', 'Your recording becomes a public voice option for this set — others can choose to hear your voice when they play it.')
+                      : t('不公開:別人在語音選單裡找不到這段錄音。你自己隨時聽得到,也可以用分享連結單獨給朋友聽。之後隨時可以改成公開。', 'Private: nobody else will find this recording in the voice menu. You can always play it yourself, and share it with a friend by link. You can make it public at any time.')}
                   </span>
                 </span>
               </label>
