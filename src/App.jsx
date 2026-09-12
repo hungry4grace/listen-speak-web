@@ -80,7 +80,12 @@ function normalizeImageUrl(url) {
     }
     if (/(^|\.)(drive|docs)\.google\.com$/i.test(u.hostname)) {
       const fileId = u.pathname.match(/\/file\/d\/([^/]+)/)?.[1] || u.searchParams.get('id');
-      if (fileId) return `https://drive.google.com/uc?export=view&id=${fileId}`;
+      // drive.google.com/uc?export=view only serves the image on a direct,
+      // top-level navigation — loaded as an <img> from another origin (i.e.
+      // exactly how this ends up being used) Google blocks it as a hotlink
+      // and it 404s. lh3.googleusercontent.com/d/ID is Google's actual
+      // image-CDN endpoint and embeds fine cross-origin.
+      if (fileId) return `https://lh3.googleusercontent.com/d/${fileId}`;
     }
   } catch {
     // Not a parseable absolute URL — leave it untouched.
@@ -9802,7 +9807,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.2
+                    v0.1.3
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
