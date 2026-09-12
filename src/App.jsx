@@ -9807,7 +9807,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.5
+                    v0.1.6
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -13340,11 +13340,11 @@ const zhcnDict = {
                   <h1 style={{ marginTop: 0, color: '#1e293b', fontSize: '1.6rem' }}>{t('聽&說 操作手冊', 'Listen&Speak Guide')}</h1>
                   <p><span dangerouslySetInnerHTML={{ __html: t('歡迎使用 <strong>聽&說 Listen&Speak</strong>！這是一個把「聽、跟著說、背起來」放在一起的雙語學習平台。<br />內建《唐詩三百首》，也可以放進任何你喜歡的好文：中英對照、一段一段，還能用自己的聲音錄下來分享。', 'Welcome to <strong>Listen&Speak</strong> — a bilingual platform for listening, repeating, and memorising.<br />It ships with the 300 Tang Poems, and you can add any text you love: Chinese and English side by side, paragraph by paragraph, in your own voice.') }} /></p>
 
-                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('一、五種語言', '1. Five languages')}</h2>
-                  <p>{t('左上角的「版本」可以選：繁體中文、簡體中文、繁體與注音符號、簡體與羅馬拼音、English。', 'The "Version" picker at the top left offers Traditional Chinese, Simplified Chinese, Traditional with Bopomofo, Simplified with Pinyin, and English.')}</p>
+                  <h2 style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '0.5rem', marginTop: '2rem' }}>{t('一、六種語言', '1. Six languages')}</h2>
+                  <p>{t('左上角的「版本」可以選：繁體中文、簡體中文、繁注、繁拼、簡拼、English。', 'The "Version" picker at the top left offers Traditional Chinese, Simplified Chinese, Traditional with Bopomofo (繁注), Traditional with Pinyin (繁拼), Simplified with Pinyin (簡拼), and English.')}</p>
                   <ul>
-                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>注音／拼音是語言的一種：</strong>選「繁體與注音符號」，每個字右邊會直排注音（像課本）；選「簡體與羅馬拼音」，拼音會標在字的上方。適合小朋友認字。', '<strong>Bopomofo and Pinyin are languages here:</strong> pick "Traditional with Bopomofo" and every character gets vertical Bopomofo on its right (like a schoolbook); pick "Simplified with Pinyin" and pinyin sits above each character. Great for young readers.') }} /></li>
-                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>第二語言：</strong>聆聽畫面下方可以選第二語言，例如主語言「繁體與注音」、第二語言「English」，每一段下面就會顯示對照的英文。', '<strong>Second language:</strong> at the bottom of the listening screen pick a second language — e.g. main "Traditional with Bopomofo", second "English" — and the matching English shows under each paragraph.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>注音／拼音是語言的一種：</strong>選「繁注」，每個字右邊會直排注音（像課本）；選「繁拼」或「簡拼」，拼音會標在字的上方。適合小朋友認字。', '<strong>Bopomofo and Pinyin are languages here:</strong> pick "繁注" and every character gets vertical Bopomofo on its right (like a schoolbook); pick "繁拼" or "簡拼" and pinyin sits above each character. Great for young readers.') }} /></li>
+                    <li><span dangerouslySetInnerHTML={{ __html: t('<strong>第二語言：</strong>聆聽畫面下方可以選第二語言，例如主語言「繁注」、第二語言「English」，每一段下面就會顯示對照的英文。', '<strong>Second language:</strong> at the bottom of the listening screen pick a second language — e.g. main "繁注", second "English" — and the matching English shows under each paragraph.') }} /></li>
                     <li><span dangerouslySetInnerHTML={{ __html: t('<strong>簡體是自動轉的：</strong>作者只要輸入繁體與英文，簡體版會自動產生。', '<strong>Simplified is generated:</strong> authors type Traditional Chinese and English; the Simplified version is produced automatically.') }} /></li>
                   </ul>
 

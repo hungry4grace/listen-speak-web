@@ -1,8 +1,9 @@
-// 聽&說 language model. Five picker options; only three underlying scripts.
+// 聽&說 language model. Six picker options; only three underlying scripts.
 //   value            script   annotation   UI dictionary
 //   cuv              zh-TW    —            zh (Traditional source strings)
 //   cuvs             zh-CN    —            cuvs (zhcnDict)
 //   cuv-bpmf         zh-TW    bopomofo     zh
+//   cuv-pinyin       zh-TW    pinyin       zh
 //   cuvs-pinyin      zh-CN    pinyin       cuvs
 //   en               en       —            en
 // The internal ids stay `cuv` / `cuvs` / `en` so the rest of the app (set
@@ -11,8 +12,9 @@
 export const LANG_OPTIONS = [
   { value: 'cuv', label: '繁體中文' },
   { value: 'cuvs', label: '简体中文' },
-  { value: 'cuv-bpmf', label: '繁體與注音符號' },
-  { value: 'cuvs-pinyin', label: '简体与罗马拼音' },
+  { value: 'cuv-bpmf', label: '繁注' },
+  { value: 'cuv-pinyin', label: '繁拼' },
+  { value: 'cuvs-pinyin', label: '简拼' },
   { value: 'en', label: 'English' },
 ];
 export const BASE_LANGS = ['cuv', 'cuvs', 'en'];
