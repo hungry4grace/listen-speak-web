@@ -63,9 +63,13 @@ import { SET_BACKGROUND_THEMES, getSetBackgroundUrl, getSetBackgroundVideoUrl } 
 import QrScanner from 'qr-scanner';
 
 // A pasted Dropbox share link (?dl=0) opens Dropbox's preview page, not the
-// raw image, so it renders broken when dropped straight into an <img> src.
-// Swapping it for ?raw=1 (Dropbox's direct-file parameter) fixes it without
-// making the user remember to edit the URL themselves.
+// raw image, and a pasted Google Drive share link (/file/d/ID/view or
+// ?id=ID) opens Drive's viewer page — neither is the raw image bytes an
+// <img src> needs, so both render broken unless rewritten. This fixes both
+// without making the user remember to edit the URL themselves. (A Drive file
+// still has to be shared as "Anyone with the link" — no URL rewrite gets
+// around that; it just gets skipped by the try/catch-style checks below and
+// the original link is returned unchanged.)
 function normalizeImageUrl(url) {
   try {
     const u = new URL(url);
@@ -73,6 +77,10 @@ function normalizeImageUrl(url) {
       u.searchParams.delete('dl');
       u.searchParams.set('raw', '1');
       return u.toString();
+    }
+    if (/(^|\.)(drive|docs)\.google\.com$/i.test(u.hostname)) {
+      const fileId = u.pathname.match(/\/file\/d\/([^/]+)/)?.[1] || u.searchParams.get('id');
+      if (fileId) return `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
   } catch {
     // Not a parseable absolute URL — leave it untouched.
@@ -9794,7 +9802,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.1
+                    v0.1.2
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
