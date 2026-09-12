@@ -5655,7 +5655,7 @@ export default function App() {
   }, [bilingualSecondaryVersion, getSetsForVersion]);
 
   const findSecondarySetForPrimarySet = React.useCallback((primarySet) => {
-    if (!primarySet || !bilingualSecondaryVersion || baseLang(bilingualSecondaryVersion) === baseLang(version)) return null;
+    if (!primarySet || !bilingualSecondaryVersion || bilingualSecondaryVersion === version) return null;
     if ((primarySet.verses || []).some(isBilingualItem)) return localizeSet(primarySet, bilingualSecondaryVersion);
     const secondarySets = getSetsForVersion(bilingualSecondaryVersion);
     if (!secondarySets.length) return null;
@@ -5781,7 +5781,7 @@ export default function App() {
     remoteDailyVerse?.date === dailyVerseDate;
   const displayedDailyVerse = remoteDailyVerseMatches ? remoteDailyVerse : (isDailyVerseLoading ? null : dailyVerse);
   const dailySecondaryVerseSet = React.useMemo(() => {
-    if (!displayedDailyVerse || !bilingualSecondaryVersion || baseLang(bilingualSecondaryVersion) === baseLang(version)) return null;
+    if (!displayedDailyVerse || !bilingualSecondaryVersion || bilingualSecondaryVersion === version) return null;
     if (isBilingualItem(displayedDailyVerse)) {
       const loc = localizeSet({ verses: [displayedDailyVerse] }, bilingualSecondaryVersion).verses[0];
       return { id: `daily-secondary-${bilingualSecondaryVersion}-${dailyVerseDate}`, title: langLabelOf(bilingualSecondaryVersion), verses: [loc] };
@@ -9807,7 +9807,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.4
+                    v0.1.5
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
