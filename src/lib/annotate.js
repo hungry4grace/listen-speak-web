@@ -7,12 +7,41 @@ let mod = null;
 let loading = null;
 const listeners = new Set();
 
+// pinyin-pro mis-resolves a handful of extremely common function-word
+// compounds by default — e.g. 什麼 comes back "shén mó" instead of "shén me",
+// and 幾歲 comes back "jī suì" instead of "jǐ suì". These are frequent enough
+// in everyday Chinese that getting them wrong actively teaches a
+// mispronunciation, so they're registered as whole-word overrides (matched
+// before pinyin-pro's own per-character heuristics) with probability 1 so
+// they always win. 幾乎 (jī hū) is deliberately left alone — 幾 there is a
+// genuinely different, correct reading, not the same bug.
+function registerHeteronymOverrides(m) {
+  const HIGH = 1;
+  m.addDict({
+    '什麼': ['shén me', HIGH],
+    '甚麼': ['shén me', HIGH],
+    '怎麼': ['zěn me', HIGH],
+    '這麼': ['zhè me', HIGH],
+    '那麼': ['nà me', HIGH],
+    '多麼': ['duō me', HIGH],
+    '幾歲': ['jǐ suì', HIGH],
+    '幾點': ['jǐ diǎn', HIGH],
+    '幾天': ['jǐ tiān', HIGH],
+    '幾月': ['jǐ yuè', HIGH],
+    '幾號': ['jǐ hào', HIGH],
+    '幾次': ['jǐ cì', HIGH],
+    '幾年': ['jǐ nián', HIGH],
+    '幾個': ['jǐ ge', HIGH],
+  }, 'creativeChineseHeteronyms');
+}
+
 export function isAnnotatorReady() { return !!mod; }
 export function loadAnnotator() {
   if (mod) return Promise.resolve(mod);
   if (!loading) {
     loading = import('pinyin-pro').then((m) => {
       mod = m;
+      registerHeteronymOverrides(m);
       listeners.forEach((fn) => { try { fn(); } catch { /* noop */ } });
       return m;
     }).catch((e) => { loading = null; throw e; });
