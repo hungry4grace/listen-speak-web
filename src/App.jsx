@@ -4657,6 +4657,9 @@ export default function App() {
         if (Notification.permission === 'denied') { setPushStatus('denied'); return; }
         const existing = await reg.pushManager.getSubscription();
         setPushStatus(existing ? 'subscribed' : 'idle');
+        // Backfill the personalCode → subscription index for devices that
+        // subscribed before this existed.
+        if (existing) registerPushCode(existing.toJSON());
       } catch (e) {
         console.error('SW register failed', e);
         setPushStatus('unsupported');
@@ -4664,6 +4667,17 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Also index this web-push subscription by personalCode (Redis) so referral
+  // milestone / cheer notifications can reach this device — the daily-push table
+  // is keyed by endpoint and can't be looked up by code.
+  const registerPushCode = (subJson) => {
+    if (!subJson || !subJson.endpoint || !personalCode) return;
+    fetch('/api/save-push-code', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: personalCode, subscription: subJson }),
+    }).catch(() => {});
+  };
 
   // Wire a subscription up with the backend. Stores it under the user's
   // playerName so the cron sender can find it. Times are encoded in the
@@ -4714,6 +4728,7 @@ export default function App() {
         }),
       });
       if (!res.ok) throw new Error('save-push-subscription failed');
+      registerPushCode(subscription.toJSON());
       setPushStatus('subscribed');
       localStorage.setItem('verserain_push_subscribed', 'true');
       return true;
@@ -5179,22 +5194,6 @@ export default function App() {
       setTimeout(() => setToast(null), 5000);
       return;
     }
-    // Duration cap: bgm loops, so 3 minutes is plenty — keeps listener
-    // downloads small.
-    try {
-      const duration = await new Promise((resolve, reject) => {
-        const probe = new Audio();
-        probe.preload = 'metadata';
-        probe.onloadedmetadata = () => { const d = probe.duration; URL.revokeObjectURL(probe.src); resolve(d); };
-        probe.onerror = () => { URL.revokeObjectURL(probe.src); reject(new Error('unreadable')); };
-        probe.src = URL.createObjectURL(file);
-      });
-      if (Number.isFinite(duration) && duration > 185) {
-        setToast(t('音樂請在 3 分鐘以內(會循環播放,不需要長)', 'Keep music under 3 minutes — it loops, so it doesn\'t need to be long'));
-        setTimeout(() => setToast(null), 5000);
-        return;
-      }
-    } catch { /* metadata unreadable — let the size cap be the guard */ }
     setMusicUploadBusy(true);
     try {
       const setId = ensureEditingSetId();
@@ -5408,6 +5407,43 @@ export default function App() {
     return { todayCount, currentStreak, longestStreak, treesPlanted, champVerses, totalActivities };
   }, [gardenData, todayDateStr]);
   const skoolLevel = React.useMemo(() => getSkoolLevel(totalFruits), [totalFruits]);
+
+  // ── 推薦里程碑 (referral milestone) ────────────────────────────────────────
+  // When a referred player (B) plants their 1st / 10th / 100th tree, notify the
+  // inviter (A) so A can cheer them on. Milestone = distinct trees in the
+  // garden (treesPlanted). One-shot per milestone via a localStorage latch;
+  // the server also de-dupes. On first run we seed latches for already-reached
+  // milestones so existing installs don't retro-notify their inviter.
+  const REFERRAL_MILESTONES = [1, 10, 100];
+  useEffect(() => {
+    let inviter = null;
+    try { inviter = localStorage.getItem('verserain_inviter'); } catch { /* storage off */ }
+    if (!inviter || inviter === personalCode) return;
+    const trees = personalProgress?.treesPlanted || 0;
+    const seeded = (() => { try { return localStorage.getItem('verserain_ms_init'); } catch { return true; } })();
+    if (!seeded) {
+      // First run: mark milestones already reached as sent (no retro-notify).
+      try {
+        for (const m of REFERRAL_MILESTONES) { if (trees >= m) localStorage.setItem(`verserain_ms_${m}_sent`, '1'); }
+        localStorage.setItem('verserain_ms_init', '1');
+      } catch { /* ignore */ }
+      return;
+    }
+    const refereeName = playerName
+      || (() => { try { return localStorage.getItem('verserain_player_name'); } catch { return ''; } })()
+      || (userEmail || '').split('@')[0] || 'Guest';
+    for (const m of REFERRAL_MILESTONES) {
+      if (trees < m) continue;
+      try { if (localStorage.getItem(`verserain_ms_${m}_sent`)) continue; } catch { continue; }
+      try { localStorage.setItem(`verserain_ms_${m}_sent`, '1'); } catch { /* ignore */ }
+      fetch('/api/referral-milestone', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inviterCode: inviter, refereeCode: personalCode, refereeName, milestone: m }),
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalProgress?.treesPlanted, personalCode, playerName, userEmail]);
+
   // Creating custom verse sets is open to ANY signed-in user — the publish
   // endpoint is owner-protected on the server, so no premium check is needed.
   // Premium / Lv.3 now only earns a celebratory badge; it's not a gate.
@@ -6187,6 +6223,15 @@ export default function App() {
       const textParam = params.get('text');
       const refParam = params.get('ref');
 
+      // ?notify=1 — arrived by tapping a referral push notification: open the
+      // 🔔 panel once the app is up, then strip the param from the URL.
+      if (params.get('notify') === '1') {
+        setShowEncouragePanel(true);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('notify');
+        window.history.replaceState({}, '', url.toString());
+      }
+
       // ?resetToken=… — the single-use link from the 忘記密碼 email. Strip it
       // from the address bar immediately so the token doesn't linger in
       // history, bookmarks or a screen-shared URL bar.
@@ -6780,6 +6825,9 @@ export default function App() {
   const [voiceCommentCounts, setVoiceCommentCounts] = useState({});
   // 鼓勵收件匣 — the logged-in user's own inbox (by their ownerId).
   const [encourageInbox, setEncourageInbox] = useState(null); // { items, lastReadAt } | null
+  // Referral notifications, keyed by personalCode (works without login): the
+  // people you invited hitting garden milestones, and cheers you received.
+  const [notifyInbox, setNotifyInbox] = useState(null); // { items, lastReadAt } | null
   const [showEncouragePanel, setShowEncouragePanel] = useState(false);
   const [myVoiceOwnerId, setMyVoiceOwnerId] = useState(null);
   // 創作者親聲朗讀 in the verse view modal — when the verse came from a set
@@ -6995,6 +7043,49 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, [userEmail]);
+
+  // Referral notification inbox (keyed by personalCode — no login needed).
+  useEffect(() => {
+    let cancelled = false;
+    if (!personalCode) return undefined;
+    (async () => {
+      try {
+        const res = await fetch(`/api/get-notify?code=${encodeURIComponent(personalCode)}`).then(r => r.ok ? r.json() : null);
+        if (!cancelled && res) setNotifyInbox({ items: res.items || [], lastReadAt: res.lastReadAt || '' });
+      } catch { /* offline — badge just stays empty */ }
+    })();
+    return () => { cancelled = true; };
+  }, [personalCode]);
+
+  // A cheers a referee B for a milestone (adds a 讚 to B's inbox).
+  const sendReferralCheer = (item) => {
+    if (!item?.refereeCode) return;
+    fetch('/api/referral-cheer', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromCode: personalCode, fromName: playerName || 'Someone', toCode: item.refereeCode, milestone: item.milestone }),
+    }).catch(() => {});
+    // Optimistically mark this milestone item as cheered.
+    setNotifyInbox(prev => prev ? {
+      ...prev,
+      items: prev.items.map(it => (it.at === item.at && it.refereeCode === item.refereeCode) ? { ...it, cheered: true } : it),
+    } : prev);
+    setToast(t('已送出鼓勵 👍', 'Cheer sent 👍'));
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  // Merge the two inboxes (voice encouragement by email, referral notifications
+  // by personalCode) into one 🔔 list, newest first, with a combined unread
+  // count. Each item is tagged with _src so the panel and read-marking know
+  // which source it came from.
+  const combinedInbox = React.useMemo(() => {
+    const voiceItems = (encourageInbox?.items || []).map(it => ({ ...it, _src: 'voice' }));
+    const notifyItems = (notifyInbox?.items || []).map(it => ({ ...it, _src: 'notify' }));
+    const all = [...voiceItems, ...notifyItems].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+    const voiceRead = encourageInbox?.lastReadAt || '';
+    const notifyRead = notifyInbox?.lastReadAt || '';
+    const unread = all.filter(it => (it.at || '') > (it._src === 'voice' ? voiceRead : notifyRead)).length;
+    return { all, unread };
+  }, [encourageInbox, notifyInbox]);
 
   // 💬/❤️ counts for the recording picker rows, fetched once per open.
   useEffect(() => {
@@ -9123,7 +9214,7 @@ const zhcnDict = {
     '預設音樂': "预设音乐",
     '無背景音樂': "无背景音乐",
     '自訂音樂 ✓(點擊更換)': "自定音乐 ✓(点击更换)",
-    '上傳 MP3(≤3分鐘,≤5MB)': "上传 MP3(≤3分钟,≤5MB)",
+    '上傳 MP3(≤5MB)': "上传 MP3(≤5MB)",
     '停止試聽': "停止试听",
     '載入中…': "载入中…",
     '音量': "音量",
@@ -9926,7 +10017,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.7
+                    v0.1.8
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -10013,17 +10104,18 @@ const zhcnDict = {
               <div className="app-auth-actions" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                 {playerName ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                    {myVoiceOwnerId && (encourageInbox?.items?.length > 0) && (() => {
-                      const items = encourageInbox.items;
-                      const lastRead = encourageInbox.lastReadAt || '';
-                      const unread = items.filter(it => (it.at || '') > lastRead).length;
+                    {combinedInbox.all.length > 0 && (() => {
+                      const unread = combinedInbox.unread;
                       return (
                         <button
                           onClick={() => {
                             setShowEncouragePanel(v => !v);
                             if (unread > 0) {
-                              voiceCommentApi.markEncouragementRead(myVoiceOwnerId).catch(() => {});
-                              setEncourageInbox(prev => prev ? { ...prev, lastReadAt: new Date().toISOString() } : prev);
+                              const nowIso = new Date().toISOString();
+                              if (myVoiceOwnerId) voiceCommentApi.markEncouragementRead(myVoiceOwnerId).catch(() => {});
+                              if (personalCode) fetch('/api/notify-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: personalCode }) }).catch(() => {});
+                              setEncourageInbox(prev => prev ? { ...prev, lastReadAt: nowIso } : prev);
+                              setNotifyInbox(prev => prev ? { ...prev, lastReadAt: nowIso } : prev);
                             }
                           }}
                           title={t('我收到的鼓勵', 'Encouragement I received')}
@@ -10578,7 +10670,7 @@ const zhcnDict = {
                               </button>
                               <button type="button" disabled={musicUploadBusy} onClick={() => musicFileInputRef.current?.click()}
                                 style={{ padding: '0.5rem 1rem', borderRadius: 20, border: `2px solid ${String(editingCustomSet.bgMusic || '').startsWith('custom:') ? '#3b82f6' : '#cbd5e1'}`, background: String(editingCustomSet.bgMusic || '').startsWith('custom:') ? '#eff6ff' : '#fefce8', color: '#334155', cursor: 'pointer', fontWeight: 600 }}>
-                                {musicUploadBusy ? `⏳ ${t('上傳中…', 'Uploading…')}` : (String(editingCustomSet.bgMusic || '').startsWith('custom:') ? `🎶 ${t('自訂音樂 ✓(點擊更換)', 'Custom ✓ (replace)')}` : `⬆️ ${t('上傳 MP3(≤3分鐘,≤5MB)', 'Upload MP3 (≤3 min, ≤5MB)')}`)}
+                                {musicUploadBusy ? `⏳ ${t('上傳中…', 'Uploading…')}` : (String(editingCustomSet.bgMusic || '').startsWith('custom:') ? `🎶 ${t('自訂音樂 ✓(點擊更換)', 'Custom ✓ (replace)')}` : `⬆️ ${t('上傳 MP3(≤5MB)', 'Upload MP3 (≤5MB)')}`)}
                               </button>
                               <input ref={musicFileInputRef} type="file" accept="audio/*" style={{ display: 'none' }} onChange={e => { handleMusicUpload(e.target.files?.[0]); e.target.value = ''; }} />
                             </div>
@@ -15528,24 +15620,68 @@ const zhcnDict = {
                 <button onClick={() => setShowEncouragePanel(false)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}><XCircle size={22} /></button>
               </div>
               <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '0.6rem 0' }}>
-                {(encourageInbox?.items || []).length === 0 && (
-                  <div style={{ color: '#94a3b8', fontSize: '0.9rem', textAlign: 'center', padding: '1.5rem 1rem' }}>{t('還沒有收到鼓勵。錄下你的聲音分享給大家吧！', 'No encouragement yet — record and share your voice!')}</div>
+                {combinedInbox.all.length === 0 && (
+                  <div style={{ color: '#94a3b8', fontSize: '0.9rem', textAlign: 'center', padding: '1.5rem 1rem' }}>{t('還沒有任何通知。邀請朋友、錄下你的聲音分享給大家吧！', 'No notifications yet — invite friends and share your voice!')}</div>
                 )}
-                {(encourageInbox?.items || []).map((it, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '0.6rem 1.3rem' }}>
-                    <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{it.kind === 'like' ? (it.emoji || '❤️') : '💬'}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ color: '#334155', fontSize: '0.9rem', lineHeight: 1.45 }}>
-                        <b>{it.fromName || t('某人', 'Someone')}</b>{' '}
-                        {it.kind === 'like'
-                          ? t('喜歡你在〈{ref}〉的錄音', 'liked your recording of {ref}').replace('{ref}', it.reference || '')
-                          : t('在〈{ref}〉留言鼓勵你', 'commented on your recording of {ref}').replace('{ref}', it.reference || '')}
+                {combinedInbox.all.map((it, i) => {
+                  // Referral milestone (I'm the inviter) — the invited friend hit a garden milestone.
+                  if (it.kind === 'milestone') {
+                    const name = it.refereeName || t('你邀請的朋友', 'the friend you invited');
+                    const icon = it.milestone >= 100 ? '🏞️' : (it.milestone >= 10 ? '🌳' : '🌱');
+                    const msg = it.milestone >= 100
+                      ? t('{n} 種滿了一整塊 10×10 田地（100 個經文）！', '{n} filled a whole 10×10 field (100 verses)!').replace('{n}', name)
+                      : it.milestone >= 10
+                        ? t('{n} 已種下 10 棵樹（完成 10 個經文）！', '{n} planted 10 trees (10 verses)!').replace('{n}', name)
+                        : t('{n} 種下了第一棵樹（完成第一個經文）！', '{n} planted their first tree (first verse)!').replace('{n}', name);
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '0.6rem 1.3rem' }}>
+                        <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{icon}</span>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ color: '#334155', fontSize: '0.9rem', lineHeight: 1.45 }}>{msg}</div>
+                          <div style={{ marginTop: 6 }}>
+                            {it.cheered ? (
+                              <span style={{ color: '#16a34a', fontSize: '0.82rem', fontWeight: 600 }}>{t('已鼓勵 👍', 'Cheered 👍')}</span>
+                            ) : it.refereeCode ? (
+                              <button onClick={() => sendReferralCheer(it)} style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: 8, padding: '0.35rem 0.9rem', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer' }}>{t('給他一個讚 👍', 'Send a cheer 👍')}</button>
+                            ) : null}
+                          </div>
+                          <div style={{ color: '#cbd5e1', fontSize: '0.72rem', marginTop: 2 }}>{new Date(it.at).toLocaleString()}</div>
+                        </div>
                       </div>
-                      {it.preview && it.kind === 'comment' && <div style={{ color: '#64748b', fontSize: '0.82rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.preview}</div>}
-                      <div style={{ color: '#cbd5e1', fontSize: '0.72rem', marginTop: 2 }}>{new Date(it.at).toLocaleString()}</div>
+                    );
+                  }
+                  // Cheer received (I'm the invited friend) — my inviter cheered me.
+                  if (it.kind === 'cheer') {
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '0.6rem 1.3rem' }}>
+                        <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>👍</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#334155', fontSize: '0.9rem', lineHeight: 1.45 }}>
+                            <b>{it.fromName || t('邀請你的人', 'the one who invited you')}</b>{' '}
+                            {t('給你一個讚，鼓勵你繼續加油！', 'sent you a cheer — keep going!')}
+                          </div>
+                          <div style={{ color: '#cbd5e1', fontSize: '0.72rem', marginTop: 2 }}>{new Date(it.at).toLocaleString()}</div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  // Voice encouragement (existing): a like/comment on my recording.
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '0.6rem 1.3rem' }}>
+                      <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>{it.kind === 'like' ? (it.emoji || '❤️') : '💬'}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: '#334155', fontSize: '0.9rem', lineHeight: 1.45 }}>
+                          <b>{it.fromName || t('某人', 'Someone')}</b>{' '}
+                          {it.kind === 'like'
+                            ? t('喜歡你在〈{ref}〉的錄音', 'liked your recording of {ref}').replace('{ref}', it.reference || '')
+                            : t('在〈{ref}〉留言鼓勵你', 'commented on your recording of {ref}').replace('{ref}', it.reference || '')}
+                        </div>
+                        {it.preview && it.kind === 'comment' && <div style={{ color: '#64748b', fontSize: '0.82rem', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.preview}</div>}
+                        <div style={{ color: '#cbd5e1', fontSize: '0.72rem', marginTop: 2 }}>{new Date(it.at).toLocaleString()}</div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
