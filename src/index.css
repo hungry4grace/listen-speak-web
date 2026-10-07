@@ -1879,3 +1879,34 @@ textarea {
 }
 /* On light backgrounds (set detail, modals) use a warm brown instead of amber. */
 .ls-on-light .ls-ruby rt, .ls-on-light .ls-bpmf-zy { color: #b45309; }
+
+/* ?voiceDebug=1 in the listen player: how a recording lines up with the phrases */
+.voice-debug-panel {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 50;
+  max-width: 280px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.voice-debug-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.voice-debug-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.75rem;
+  cursor: pointer;
+}

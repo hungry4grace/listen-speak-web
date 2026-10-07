@@ -8,6 +8,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { classifyGardenResponse, decideGardenSync, buildFruitAuthorKeys, aggregateFruitResults } from './lib/gardenSync.js';
 import { voiceId, voiceMatchesSavedKey, dedupeVoices, buildVoiceOptions } from './lib/voicePicker.js';
 import { splitVersePhrases } from './lib/phraseSplitter.js';
+import { ANALYSIS_VERSION, analyzeDataUrl, cacheAnalysis, cachedAnalysis, cleanVoiceAnalysis, forgetCachedAnalysis } from './lib/voiceAnalysis.js';
+import { alignReading, boundaryStrengths, estimateReading, phraseShowTime } from './lib/voiceAlign.js';
 import { stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
 import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf } from './lib/lang.js';
@@ -1840,6 +1842,10 @@ function VerseSetContinuousRainPlayer({
   // networks and wrongly fall back to TTS.
   const verseVoicesReadyRef = useRef(Promise.resolve());
   const creatorAudioRef = useRef(null);
+  // ?voiceDebug=1 — show how the recording was lined up with the phrases.
+  const voiceDebug = useMemo(() => { try { return new URLSearchParams(window.location.search).get('voiceDebug') === '1'; } catch { return false; } }, []);
+  const [voiceDebugInfo, setVoiceDebugInfo] = useState(null);
+  const voiceDebugActionsRef = useRef(null);
   // True while a voice recording is paused mid-playback (Pause button), so
   // Resume continues from the same position instead of replaying the verse.
   const pausedRecordingRef = useRef(false);
@@ -2164,7 +2170,24 @@ function VerseSetContinuousRainPlayer({
     onOpenVoiceComments?.({ setId: voiceSetId, reference: ref, targetOwnerId: ownerId, recordedBy, mine: ownerId === myOwnerIdRef.current });
   };
 
-  const playCreatorRecording = async (rec, phrasesArr, onPhrase, displayName, onAudioStart) => {
+  // Saving a recording's pause analysis back with it is for whoever may
+  // replace that recording: its own recorder (personal layer) or the author
+  // layer's recorder (the server also lets the set owner / an admin). Others
+  // just keep their measurement on their device.
+  const recordingWriter = (rec, isPersonal, isOwnVoice) => {
+    const mine = myOwnerIdRef.current;
+    if (!userEmail || !rec?.voiceId || !mine) return null;
+    const personalLayer = rec.source ? rec.source === 'contributor' : isPersonal;
+    const recOwner = rec.ownerId || rec.byOwnerId || (isPersonal && isOwnVoice ? mine : null);
+    if (recOwner !== mine) return null;
+    const setId = personalLayer ? (rec.voiceBucket || personalVoiceSetId) : voiceSetId;
+    if (!setId) return null;
+    return (voiceAnalysis) => setVoiceApi.saveAnalysis(userEmail, setId, currentVerse.reference, {
+      layer: personalLayer ? 'personal' : 'owner', voiceId: rec.voiceId, voiceAnalysis,
+    });
+  };
+  // timing: { text, introText (the reference as spoken), isPageStart(i), persist(analysis|null) }
+  const playCreatorRecording = async (rec, phrasesArr, onPhrase, displayName, onAudioStart, timing = {}) => {
     try {
       let dataUrl = voiceAudioCacheRef.current.get(rec.voiceId);
       if (!dataUrl) {
@@ -2188,27 +2211,63 @@ function VerseSetContinuousRainPlayer({
       setCreatorVoiceName(displayName !== undefined ? displayName : (rec.recordedBy || ''));
       // Audio is in hand — drop the "loading the reading" hint.
       onAudioStart?.();
-      const durMs = rec.voiceDur > 0 ? rec.voiceDur * 1000 : 8000;
-      // Advance phrase highlights proportionally to each phrase's length,
-      // driven by the audio's ACTUAL position (timeupdate) — wall-clock
-      // timers kept marching while the user paused the clip, so the verse
-      // display ran ahead of the silent audio.
-      const totalLen = phrasesArr.reduce((a, p) => a + p.length, 0) || 1;
-      let acc = 0;
-      const thresholds = phrasesArr.map((p) => {
-        const startAt = Math.round(durMs * acc / totalLen) + 200;
-        acc += p.length;
-        return startAt;
-      });
+      // When each phrase is heard: line the phrases up with the reader's
+      // pauses (measured once per recording — stored with it, cached on this
+      // device, or measured now from the audio we just fetched). Until a
+      // measurement exists, estimate from the phrase lengths.
+      const stored = cleanVoiceAnalysis(rec.voiceAnalysis);
+      let analysis = stored && stored.v === ANALYSIS_VERSION ? stored : cachedAnalysis(rec.voiceId);
+      let source = analysis ? (analysis === stored ? 'stored' : 'cached') : 'estimate';
+      const strengths = boundaryStrengths(timing.text || phrasesArr.join(', '), phrasesArr);
+      const plan = (a) => {
+        if (a && a.pauses.length && phrasesArr.length) {
+          const r = alignReading({ analysis: a, phrases: phrasesArr, strengths, introText: timing.introText || '' });
+          if (Number.isFinite(r.cost)) return { units: r.units, intro: r.intro, estimated: false };
+        }
+        return { units: estimateReading({ dur: a?.dur || rec.voiceDur || 8, speech: a?.speech, phrases: phrasesArr, introText: timing.introText || '' }), intro: null, estimated: true };
+      };
+      let schedule = plan(analysis);
+      const measureNow = async ({ force = false } = {}) => {
+        if (force) forgetCachedAnalysis(rec.voiceId);
+        const a = await analyzeDataUrl(dataUrl);
+        cacheAnalysis(rec.voiceId, a);
+        analysis = a;
+        source = 'measured';
+        schedule = plan(a);
+        // The recording's owner keeps the measurement with the recording, so
+        // other listeners needn't measure it again.
+        if (timing.persist && (force || !stored || stored.v !== ANALYSIS_VERSION)) timing.persist(a).catch(() => {});
+        return a;
+      };
+      if (!analysis) measureNow().catch(() => { /* undecodable here: keep the estimate */ });
+      const durMs = (analysis?.dur || rec.voiceDur || 8) * 1000;
       let nextPhraseIdx = 0;
+      const showAt = (i) => phraseShowTime(schedule.units, i, { pageStart: Boolean(timing.isPageStart?.(i)), estimated: schedule.estimated });
       const timeHandler = () => {
-        const ms = audio.currentTime * 1000;
-        while (nextPhraseIdx < thresholds.length && ms >= thresholds[nextPhraseIdx]) {
+        const t = audio.currentTime;
+        while (nextPhraseIdx < phrasesArr.length && t >= showAt(nextPhraseIdx)) {
           onPhrase(nextPhraseIdx);
           nextPhraseIdx += 1;
         }
+        if (voiceDebug) {
+          const i = Math.max(0, nextPhraseIdx - 1);
+          const u = schedule.units[i];
+          setVoiceDebugInfo({ t, i, n: phrasesArr.length, start: u?.start, end: u?.end, source: schedule.estimated ? `${source} → estimate` : source, intro: schedule.intro, pauses: analysis?.pauses?.length ?? 0 });
+        }
       };
+      // Follow the audio every frame (timeupdate alone fires only ~4× a
+      // second); timeupdate still drives it while the tab is in the background.
+      let raf = 0;
+      // A newer run that took over the audio element stops this loop.
+      const frame = () => { if (audio.ontimeupdate !== timeHandler) return; timeHandler(); raf = window.requestAnimationFrame(frame); };
+      raf = window.requestAnimationFrame(frame);
       audio.ontimeupdate = timeHandler;
+      if (voiceDebug) {
+        voiceDebugActionsRef.current = {
+          reanalyse: () => measureNow({ force: true }).catch(() => {}),
+          clearStored: () => timing.persist?.(null).catch(() => {}),
+        };
+      }
       let endHandler = null;
       let errHandler = null;
       const finished = await new Promise((resolve) => {
@@ -2224,6 +2283,7 @@ function VerseSetContinuousRainPlayer({
         // and onended then advances).
         window.setTimeout(() => { if (!pausedRecordingRef.current) fin(true); }, durMs + 15000);
       });
+      window.cancelAnimationFrame(raf);
       setCreatorVoiceName('');
       // Keep the element alive (see gesture note above) — detach OUR handlers
       // only. Runs overlap (a cancelled run resolves after its successor
@@ -2826,7 +2886,13 @@ function VerseSetContinuousRainPlayer({
             if (phrasePageEndRef.current !== pg.end) { setPhrasePageEnd(pg.end); phrasePageEndRef.current = pg.end; }
             setActivePhrase(i);
           }
-        }, voiceLabel, stopLoadingHint);
+        }, voiceLabel, stopLoadingHint, {
+          text: currentVerse.text || '',
+          // Readers often say the reference first; it is spotted and skipped.
+          introText: formatVerseReferenceForSpeech(currentVerse.reference),
+          isPageStart: (i) => i > 0 && pageForIndex(i).start === i,
+          persist: recordingWriter(creatorRec, creatorRec === personalRec, isOwnVoice),
+        });
         if (cancelled || runRef.current !== runId) { stopLoadingHint(); return; }
       }
       stopLoadingHint();
@@ -3618,6 +3684,19 @@ function VerseSetContinuousRainPlayer({
               })}
             </div>
             <button onClick={() => setSwapVoiceMenu(null)} style={{ marginTop: '1rem', width: '100%', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.9rem' }}>{t('取消', 'Cancel')}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ?voiceDebug=1 — how the recording lines up with the phrases (developer view) */}
+      {voiceDebug && voiceDebugInfo && (
+        <div className="voice-debug-panel">
+          <div>phrase {voiceDebugInfo.i + 1}/{voiceDebugInfo.n} · t {voiceDebugInfo.t.toFixed(2)}s</div>
+          <div>heard {voiceDebugInfo.start?.toFixed(2)}–{voiceDebugInfo.end?.toFixed(2)}s</div>
+          <div>{voiceDebugInfo.source} · {voiceDebugInfo.pauses} pauses · intro {voiceDebugInfo.intro ? `${voiceDebugInfo.intro.start.toFixed(2)}–${voiceDebugInfo.intro.end.toFixed(2)}s` : 'none'}</div>
+          <div className="voice-debug-actions">
+            <button type="button" className="voice-debug-btn" onClick={() => voiceDebugActionsRef.current?.reanalyse()}>{t('重新分析', 'Re-analyse')}</button>
+            <button type="button" className="voice-debug-btn" onClick={() => voiceDebugActionsRef.current?.clearStored()}>{t('清除已存的分析', 'Clear stored analysis')}</button>
           </div>
         </div>
       )}
@@ -10017,7 +10096,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.8
+                    v0.1.9
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>

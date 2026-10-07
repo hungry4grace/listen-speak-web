@@ -1,4 +1,5 @@
 import { PARTY_DB } from './lib/partyHost.js';
+import { analyzeBlob } from './lib/voiceAnalysis.js';
 // 題庫創作者親聲朗讀 — client API for per-verse creator recordings on
 // custom verse sets. Keyed by (setId, reference): the same verse in two
 // different sets carries two independent recordings. One recording per
@@ -30,8 +31,12 @@ async function jget(path) {
 export const setVoiceApi = {
   uploadChunk: (email, setId, voiceId, index, total, data) =>
     jpost('/sets/verse-voice/chunk', { email, setId, voiceId, index, total, data }),
-  register: (email, setId, reference, { voiceId, voiceMime, voiceDur, recordedBy }) =>
-    jpost('/sets/verse-voice/set', { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy }),
+  register: (email, setId, reference, { voiceId, voiceMime, voiceDur, recordedBy, voiceAnalysis }) =>
+    jpost('/sets/verse-voice/set', { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy, voiceAnalysis }),
+  // Replace (or clear, with analysis null) the pause analysis stored with one
+  // recording. layer: 'owner' (set author slot) | 'personal'.
+  saveAnalysis: (email, setId, reference, { layer, voiceId, voiceAnalysis, ownerId }) =>
+    jpost('/sets/voice-analysis/set', { email, setId, reference, layer, voiceId, voiceAnalysis, ownerId }),
   // { voices: { [reference]: { voiceId, voiceMime, voiceDur, recordedBy, at } } }
   getAll: (setId) =>
     jget(`/sets/verse-voices?setId=${encodeURIComponent(setId)}`),
@@ -111,6 +116,18 @@ export async function compressBackgroundImage(file) {
   throw new Error('Image too large — please choose a smaller photo.');
 }
 
+// Where the reader pauses + the real length, measured before upload so every
+// listener's player can line the phrases up with the voice. A recording that
+// can't be decoded here is still uploaded (players then estimate).
+async function measure(blob, dur) {
+  try {
+    const voiceAnalysis = await analyzeBlob(blob);
+    return { voiceAnalysis, voiceDur: voiceAnalysis.dur || dur };
+  } catch {
+    return { voiceAnalysis: undefined, voiceDur: dur };
+  }
+}
+
 // Convenience: record-blob → chunk upload → register, in one call.
 // Returns the registered meta. Throws with a readable message on failure
 // (including the 403 "someone else recorded this" case).
@@ -130,8 +147,9 @@ export async function uploadVerseVoice({ email, setId, reference, blob, mime, du
   for (let i = 0; i < total; i++) {
     await setVoiceApi.uploadChunk(email, setId, voiceId, i, total, base64.slice(i * CHUNK, (i + 1) * CHUNK));
   }
+  const { voiceAnalysis, voiceDur } = await measure(blob, dur);
   const res = await setVoiceApi.register(email, setId, reference, {
-    voiceId, voiceMime: mime, voiceDur: dur, recordedBy,
+    voiceId, voiceMime: mime, voiceDur, recordedBy, voiceAnalysis,
   });
   return res.verseVoice;
 }
@@ -152,8 +170,8 @@ export async function voiceOwnerId(email) {
 }
 
 export const userVoiceApi = {
-  register: (email, setId, reference, { voiceId, voiceMime, voiceDur, recordedBy, public: isPublic }) =>
-    jpost('/sets/user-verse-voice/set', { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy, public: isPublic }),
+  register: (email, setId, reference, { voiceId, voiceMime, voiceDur, recordedBy, public: isPublic, voiceAnalysis }) =>
+    jpost('/sets/user-verse-voice/set', { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy, public: isPublic, voiceAnalysis }),
   // { voices: { [reference]: meta } } — for one owner (self, or a share's vo=).
   // The server hides that owner's private recordings unless you identify
   // yourself as them (`email`), or quote one recording's voiceId from a share
@@ -199,8 +217,9 @@ export async function uploadUserVerseVoice({ email, setId, reference, blob, mime
   for (let i = 0; i < total; i++) {
     await setVoiceApi.uploadChunk(email, setId, voiceId, i, total, base64.slice(i * CHUNK, (i + 1) * CHUNK));
   }
+  const { voiceAnalysis, voiceDur } = await measure(blob, dur);
   const res = await userVoiceApi.register(email, setId, reference, {
-    voiceId, voiceMime: mime, voiceDur: dur, recordedBy, public: isPublic,
+    voiceId, voiceMime: mime, voiceDur, recordedBy, public: isPublic, voiceAnalysis,
   });
   return { ...(res.verseVoice || {}), ownerId: res.ownerId };
 }

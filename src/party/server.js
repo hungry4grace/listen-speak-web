@@ -1,3 +1,4 @@
+import { cleanVoiceAnalysis } from '../lib/voiceAnalysis.js';
 // Opaque, stable per-account id for the personal-voice layer: sha256(email)
 // prefix. Lets share links carry "whose voice" without exposing the email,
 // and survives playerName changes. The client computes the same value.
@@ -1441,7 +1442,7 @@ export default class Server {
       // POST /sets/verse-voice/set — { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy }
       if (url.pathname.endsWith('/sets/verse-voice/set') && request.method === 'POST') {
          try {
-            const { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy } = await request.json();
+            const { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy, voiceAnalysis } = await request.json();
             if (!email || !setId || !reference) return new Response(JSON.stringify({ error: 'email, setId, reference required' }), { status: 400, headers: corsHeaders });
             if (!/^v_[A-Za-z0-9]{6,20}$/.test(String(voiceId || ''))) return new Response(JSON.stringify({ error: 'bad voiceId' }), { status: 400, headers: corsHeaders });
             const emailLc = String(email).toLowerCase().trim();
@@ -1472,6 +1473,10 @@ export default class Server {
                byOwnerId: await voiceOwnerId(emailLc),
                at: new Date().toISOString(),
             };
+            // Where the reader pauses (measured on the recorder's device) — the
+            // player lines the phrases up with it. Dropped if malformed.
+            const analysis = cleanVoiceAnalysis(voiceAnalysis);
+            if (analysis) meta.voiceAnalysis = analysis;
             await this.room.storage.put(key, meta);
             return new Response(JSON.stringify({ success: true, verseVoice: meta }), { status: 200, headers: corsHeaders });
          } catch {
@@ -1506,6 +1511,51 @@ export default class Server {
             return new Response(JSON.stringify({ success: true, deleted: true }), { status: 200, headers: corsHeaders });
          } catch {
             return new Response(JSON.stringify({ error: 'Failed to delete verse voice' }), { status: 500, headers: corsHeaders });
+         }
+      }
+
+      // POST /sets/voice-analysis/set — { email, setId, reference, layer: 'owner'|'personal', voiceId, voiceAnalysis, ownerId? }
+      // Replace (or, with voiceAnalysis: null, clear) the stored pause analysis
+      // of one recording — "re-analyse" when the phrases didn't line up, or
+      // after the measurement changed version. Only whoever may replace the
+      // recording itself may do this: its recorder, the set owner (author
+      // layer) or an admin; personal recordings by their own recorder (an
+      // admin names the ownerId). voiceId must still be the stored one.
+      if (url.pathname.endsWith('/sets/voice-analysis/set') && request.method === 'POST') {
+         try {
+            const { email, setId, reference, layer, voiceId, voiceAnalysis, ownerId: askedOwner } = await request.json();
+            if (!email || !setId || !reference || !voiceId) return new Response(JSON.stringify({ error: 'email, setId, reference, voiceId required' }), { status: 400, headers: corsHeaders });
+            const emailLc = String(email).toLowerCase().trim();
+            const refKey = encodeURIComponent(String(reference).trim().slice(0, 60));
+            let key;
+            if (layer === 'personal') {
+               const mine = await voiceOwnerId(emailLc);
+               const owner = askedOwner && askedOwner !== mine ? (isTrustedAdminEmail(email) ? String(askedOwner) : null) : mine;
+               if (!owner) return new Response(JSON.stringify({ error: 'Not authorized' }), { status: 403, headers: corsHeaders });
+               key = `user-verse-voice:${owner}:${String(setId)}:${refKey}`;
+            } else {
+               key = `set-verse-voice:${String(setId)}:${refKey}`;
+            }
+            const meta = await this.room.storage.get(key);
+            if (!meta || meta.voiceId !== String(voiceId)) return new Response(JSON.stringify({ error: 'No such recording' }), { status: 404, headers: corsHeaders });
+            if (layer !== 'personal') {
+               const setDoc = await this.room.storage.get(`verseset:${String(setId)}`);
+               const authorized = (meta.byEmail && meta.byEmail === emailLc)
+                  || (setDoc?.ownerEmail && String(setDoc.ownerEmail).toLowerCase() === emailLc)
+                  || isTrustedAdminEmail(email);
+               if (!authorized) return new Response(JSON.stringify({ error: 'Not authorized' }), { status: 403, headers: corsHeaders });
+            }
+            if (voiceAnalysis === null) delete meta.voiceAnalysis;
+            else {
+               const analysis = cleanVoiceAnalysis(voiceAnalysis);
+               if (!analysis) return new Response(JSON.stringify({ error: 'bad voiceAnalysis' }), { status: 400, headers: corsHeaders });
+               meta.voiceAnalysis = analysis;
+               if (analysis.dur > 0) meta.voiceDur = Math.min(analysis.dur, 1800);
+            }
+            await this.room.storage.put(key, meta);
+            return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+         } catch {
+            return new Response(JSON.stringify({ error: 'Failed to save voice analysis' }), { status: 500, headers: corsHeaders });
          }
       }
 
@@ -1553,7 +1603,7 @@ export default class Server {
       if (url.pathname.endsWith('/sets/user-verse-voice/set') && request.method === 'POST') {
          try {
             const body = await request.json();
-            const { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy } = body;
+            const { email, setId, reference, voiceId, voiceMime, voiceDur, recordedBy, voiceAnalysis } = body;
             const isPublic = body.public !== false; // default true
             if (!email || !setId || !reference) return new Response(JSON.stringify({ error: 'email, setId, reference required' }), { status: 400, headers: corsHeaders });
             if (!/^v_[A-Za-z0-9]{6,20}$/.test(String(voiceId || ''))) return new Response(JSON.stringify({ error: 'bad voiceId' }), { status: 400, headers: corsHeaders });
@@ -1568,6 +1618,8 @@ export default class Server {
                public: isPublic,
                at: new Date().toISOString(),
             };
+            const analysis = cleanVoiceAnalysis(voiceAnalysis);
+            if (analysis) meta.voiceAnalysis = analysis;
             const key = `user-verse-voice:${ownerId}:${String(setId)}:${refKey}`;
             await this.room.storage.put(key, meta);
             // Recompute this owner's index entry from their actual recordings —
@@ -1742,6 +1794,7 @@ export default class Server {
                   recordedBy: meta.recordedBy || '',
                   voiceId: meta.voiceId, voiceMime: meta.voiceMime || 'audio/webm',
                   voiceDur: meta.voiceDur || 0, at: meta.at || '', source: 'owner',
+                  ...(meta.voiceAnalysis ? { voiceAnalysis: meta.voiceAnalysis } : {}),
                });
             }
             // Public, non-hidden contributors.
@@ -1756,6 +1809,7 @@ export default class Server {
                      recordedBy: meta.recordedBy || v.recordedBy || '',
                      voiceId: meta.voiceId, voiceMime: meta.voiceMime || 'audio/webm',
                      voiceDur: meta.voiceDur || 0, at: meta.at || '', source: 'contributor',
+                     ...(meta.voiceAnalysis ? { voiceAnalysis: meta.voiceAnalysis } : {}),
                   });
                }
             }
