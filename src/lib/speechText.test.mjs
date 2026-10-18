@@ -1,7 +1,7 @@
 // 地 (dì / de) for the speech engine. Run: node --test src/lib/speechText.test.mjs
 import assert from 'node:assert';
 import { test } from 'node:test';
-import { fixChineseHeteronymsForSpeech, fixChineseNamesForSpeech, toSpeechText } from './speechText.js';
+import { fixChineseHeteronymsForSpeech, fixChineseNamesForSpeech, fixHebrewDivineNameForSpeech, toSpeechText } from './speechText.js';
 
 const bible = (s) => fixChineseHeteronymsForSpeech(s, { defaultReading: 'di' });
 const prose = (s) => fixChineseHeteronymsForSpeech(s, { defaultReading: 'de' });
@@ -60,4 +60,32 @@ test('耶和華: 和 is spoken hé (合), never the conjunction hàn', () => {
   assert.strictEqual(fixChineseNamesForSpeech('你和我'), '你和我', 'other 和 untouched');
   assert.strictEqual(toSpeechText('全地都要向耶和華歡呼', 'zh-TW'), '全第都要向耶合華歡呼');
   assert.strictEqual(toSpeechText('耶和華', 'en-US'), '耶和華');
+});
+
+test('Hebrew: יהוה is read Adonai, never pronounced', () => {
+  const he = fixHebrewDivineNameForSpeech;
+  assert.strictEqual(he('ויאמר יהוה אל אברם'), 'ויאמר אֲדֹנָי אל אברם'); // unpointed (Gen 12:1)
+  assert.strictEqual(he('וַיֹּאמֶר יְהוָה אֶל־אַבְרָם'), 'וַיֹּאמֶר אֲדֹנָי אֶל־אַבְרָם');
+  assert.strictEqual(he('וַיֹּ֤אמֶר יְהוָה֙ אֶל־אַבְרָ֔ם'), 'וַיֹּ֤אמֶר אֲדֹנָי אֶל־אַבְרָ֔ם'); // with cantillation
+  assert.strictEqual(he('מִזְבֵּחַ לַיהוָה'), 'מִזְבֵּחַ לַאֲדֹנָי'); // prefix keeps its vowel: la-Adonai
+  assert.strictEqual(he('וַיהוָה אָמַר'), 'וַאֲדֹנָי אָמַר');
+  assert.strictEqual(he('וַיִּקְרָא בְּשֵׁם יְהוָה'), 'וַיִּקְרָא בְּשֵׁם אֲדֹנָי');
+  assert.strictEqual(he('אֶל־יְהוָה'), 'אֶל־אֲדֹנָי'); // after maqaf
+  assert.strictEqual(he('יְהוָה יְהוָה אֵל רַחוּם'), 'אֲדֹנָי אֲדֹנָי אֵל רַחוּם'); // Ex 34:6
+});
+
+test('Hebrew: next to אדני the name is read Elohim', () => {
+  const he = fixHebrewDivineNameForSpeech;
+  assert.strictEqual(he('אֲדֹנָי יֱהוִה מַה־תִּתֶּן־לִי'), 'אֲדֹנָי אֱלֹהִים מַה־תִּתֶּן־לִי'); // Gen 15:2
+  assert.strictEqual(he('אדני יהוה'), 'אדני אֱלֹהִים');
+  assert.strictEqual(he('יֱהוִה אֲדֹנָי חֵילִי'), 'אֱלֹהִים אֲדֹנָי חֵילִי'); // Hab 3:19
+});
+
+test('Hebrew: other words untouched; only Hebrew speech is changed', () => {
+  const he = fixHebrewDivineNameForSpeech;
+  assert.strictEqual(he('יְהוּדָה וִיהוּדָה'), 'יְהוּדָה וִיהוּדָה'); // Judah
+  assert.strictEqual(he('הַלְלוּ־יָהּ'), 'הַלְלוּ־יָהּ');
+  assert.strictEqual(toSpeechText('ויאמר יהוה', 'he-IL'), 'ויאמר אֲדֹנָי');
+  assert.strictEqual(toSpeechText('ויאמר יהוה', 'zh-TW'), 'ויאמר יהוה');
+  assert.strictEqual(toSpeechText('the LORD', 'en-US'), 'the LORD');
 });
