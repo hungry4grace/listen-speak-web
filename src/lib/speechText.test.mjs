@@ -89,3 +89,31 @@ test('Hebrew: other words untouched; only Hebrew speech is changed', () => {
   assert.strictEqual(toSpeechText('ויאמר יהוה', 'zh-TW'), 'ויאמר יהוה');
   assert.strictEqual(toSpeechText('the LORD', 'en-US'), 'the LORD');
 });
+
+test('Chinese Bible words the voice misreads go through one-reading homophones', () => {
+  const w = (s) => toSpeechText(s, 'zh-TW');
+  assert.strictEqual(w('神的應許'), '神的映許');
+  assert.strictEqual(w('要應驗先知的話'), '要映驗先知的話');
+  assert.strictEqual(w('你們必須重生'), '你們必須崇生');
+  assert.strictEqual(w('我差遣你們'), '我拆遣你們');
+  assert.strictEqual(w('供給你們一切所需用的'), '供己你們一切所需用的');
+  assert.strictEqual(w('必有童女懷孕'), '必有童女懷孕');
+  assert.strictEqual(w('撒但退去吧'), '仨但退去吧');
+  assert.strictEqual(w('撒母耳'), '仨母耳');
+  assert.strictEqual(w('拿撒勒人耶穌'), '拿仨勒人耶穌');
+  assert.strictEqual(w('有一個撒種的出去撒種'), '有一個灑種的出去灑種');
+  assert.strictEqual(w('亞伯拉罕生以撒'), '亞伯拉罕生以仨');
+  assert.strictEqual(w('可以撒在田裡'), '可以撒在田裡', 'verb 撒 after 可以 is not Isaac');
+  assert.strictEqual(w('阿們'), '阿門');
+  assert.strictEqual(w('便雅憫支派'), '變雅憫支派');
+  assert.strictEqual(w('長老和長子'), '掌老合掌子');
+  assert.strictEqual(w('应许'), '映许');
+});
+
+test('和 is hé in Bible text; textbook prose keeps the voice reading', () => {
+  assert.strictEqual(toSpeechText('神和人', 'zh-TW'), '神合人');
+  assert.strictEqual(toSpeechText('耶和華', 'zh-TW'), '耶合華');
+  assert.strictEqual(toSpeechText('我和你', 'zh-TW', { defaultReading: 'de' }), '我和你');
+  assert.strictEqual(toSpeechText('耶和華', 'zh-TW', { defaultReading: 'de' }), '耶合華');
+  assert.strictEqual(toSpeechText('神和人', 'en-US'), '神和人');
+});
