@@ -33,3 +33,8 @@ scripts/.topic-sets-tw.json
 scripts/.topic-prayer.json
 .partykit
 scratch/
+
+# PartyKit → Cloudflare move: backups hold personal data — never commit them.
+backup/
+.wrangler/
+.dev.vars

@@ -19,7 +19,7 @@ Content is stored as Traditional Chinese + English per paragraph; Simplified is 
 ```bash
 npm install
 npx vite --port 5181          # web app
-npx partykit dev --port 1999  # backend (then set localStorage.ls_party_host = 'http://127.0.0.1:1999')
+npm run dev:party -- --port 1999  # backend (then set localStorage.ls_party_host = 'http://127.0.0.1:1999')
 ```
 
 - Build: `npm run build`

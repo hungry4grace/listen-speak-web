@@ -122,6 +122,31 @@ export function generateResetToken() {
 
 export const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
+// Full restore from the old PartyKit room (Oct 2026): how an old record meets
+// a key the new server already holds. Returns the value to store, or
+// undefined to leave the new one alone. The new server's data always wins;
+// the old copy only fills gaps or adds to lists. Running it twice changes
+// nothing.
+export function restoreMerge(key, old, cur) {
+  const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  const fill = (c, o) => { const out = { ...c }; for (const k of Object.keys(o)) if (out[k] === undefined) out[k] = o[k]; return out; };
+  if (key.startsWith('user:')) return isObj(old) && isObj(cur) ? fill(cur, old) : undefined;
+  if (key.startsWith('favorites:')) {
+    if (!isObj(old) || !isObj(cur)) return undefined;
+    return { ...cur, setIds: Array.from(new Set([...(cur.setIds || []), ...(old.setIds || [])])).slice(0, 80) };
+  }
+  if (key.startsWith('views:')) return Math.max(Number(cur) || 0, Number(old) || 0);
+  if (key.startsWith('set-voice-index:') || key.startsWith('garden-tombstones:')) {
+    return isObj(old) && isObj(cur) ? fill(cur, old) : undefined;
+  }
+  if (key.startsWith('voice-encourage:')) {
+    if (!Array.isArray(old) || !Array.isArray(cur)) return undefined;
+    const seen = new Set();
+    return [...cur, ...old].filter(e => { const j = JSON.stringify(e); return !seen.has(j) && seen.add(j); }).slice(0, 50);
+  }
+  return undefined;
+}
+
 export default class Server {
   constructor(room) {
     this.room = room;
@@ -2534,6 +2559,74 @@ export default class Server {
             return new Response(JSON.stringify({ date: day, dau: map.size, loggedIn, guests, newRegistrations }), { status: 200, headers: corsHeaders });
          } catch(e) {
             return new Response(JSON.stringify({ error: 'Failed to compute stats' }), { status: 500, headers: corsHeaders });
+         }
+      }
+
+      // PartyKit → PartyServer move (Oct 2026). PartyKit re-opened deploys
+      // until 30 Oct, so the old room hands over a full copy:
+      // GET /admin/export?after=<last key> → { entries: [[key, value]…], next }.
+      // Answers only on the old PartyKit host — worker.js marks the new room
+      // `partyserver` — and only to the admin token. Pages stay under ~3 MB.
+      if (url.pathname.endsWith('/admin/export') && request.method === 'GET') {
+         if (this.room.partyserver) return new Response("Not Found API Route", { status: 404, headers: corsHeaders });
+         if (!isCustomSetWriteAuthorized()) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+         try {
+            const after = url.searchParams.get('after') || '';
+            const LIMIT = 300;
+            const page = await this.room.storage.list(after ? { start: after, limit: LIMIT } : { limit: LIMIT });
+            const entries = [];
+            let size = 0, full = false;
+            for (const [key, value] of page) {
+               if (key === after) continue;
+               const n = key.length + (JSON.stringify(value) || '').length;
+               if (entries.length && size + n > 3_000_000) { full = true; break; }
+               entries.push([key, value]);
+               size += n;
+            }
+            const more = full || page.size >= LIMIT;
+            const next = more && entries.length ? entries[entries.length - 1][0] : null;
+            return new Response(JSON.stringify({ entries, next }), { status: 200, headers: corsHeaders });
+         } catch {
+            return new Response(JSON.stringify({ error: 'Export failed' }), { status: 500, headers: corsHeaders });
+         }
+      }
+
+      // POST /admin/import { entries: [[key, value]…] } — loads that copy into
+      // the new server. OFF unless the MIGRATION_IMPORT secret is "on" (delete
+      // it afterwards); admin token only. A key the new server already has is
+      // merged by restoreMerge (new data wins) or left alone. Reset tokens and
+      // rate-limit buckets are stale; gardens go through /save-garden. A
+      // private set's chunks only go in when the new server has no copy of
+      // that set (the script sends them together).
+      if (url.pathname.endsWith('/admin/import') && request.method === 'POST') {
+         if (this.room.env.MIGRATION_IMPORT !== 'on') return new Response("Not Found API Route", { status: 404, headers: corsHeaders });
+         if (!isCustomSetWriteAuthorized()) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
+         try {
+            const { entries = [] } = await request.json();
+            if (!Array.isArray(entries) || entries.length > 200) return new Response(JSON.stringify({ error: 'entries: at most 200 [key, value] pairs' }), { status: 400, headers: corsHeaders });
+            const SKIP = /^(reset:|touch-ip:|garden:)/;
+            const setGroup = (k) => { const m = /^(private-sets:.*::)part:\d+$/.exec(k); return m ? m[1] : null; };
+            const haveSet = new Map();
+            for (const pair of entries) {
+               const g = Array.isArray(pair) && typeof pair[0] === 'string' ? setGroup(pair[0]) : null;
+               if (g && !haveSet.has(g)) haveSet.set(g, (await this.room.storage.list({ prefix: g, limit: 1 })).size > 0);
+            }
+            let written = 0, merged = 0, skipped = 0;
+            for (const pair of entries) {
+               const [key, value] = Array.isArray(pair) ? pair : [];
+               if (typeof key !== 'string' || SKIP.test(key) || value === undefined) { skipped++; continue; }
+               const g = setGroup(key);
+               if (g && haveSet.get(g)) { skipped++; continue; }
+               const cur = await this.room.storage.get(key);
+               if (cur === undefined) { await this.room.storage.put(key, value); written++; continue; }
+               const next = restoreMerge(key, value, cur);
+               if (next === undefined || JSON.stringify(next) === JSON.stringify(cur)) { skipped++; continue; }
+               await this.room.storage.put(key, next);
+               merged++;
+            }
+            return new Response(JSON.stringify({ success: true, written, merged, skipped }), { status: 200, headers: corsHeaders });
+         } catch {
+            return new Response(JSON.stringify({ error: 'Import failed' }), { status: 500, headers: corsHeaders });
          }
       }
 

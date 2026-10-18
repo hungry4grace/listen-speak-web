@@ -12,7 +12,7 @@
 //      no-op.
 //
 // Required env:
-//   PARTY_BASE                 e.g. https://verserain-party.hungry4grace.partykit.dev/parties/main/global-auth-db
+//   PARTY_BASE                 e.g. https://verserain-party.verserain.workers.dev/parties/main/global-auth-db
 //   ADMIN_TOKEN                matches the PartyKit ADMIN_TOKEN / PARTYKIT_ADMIN_TOKEN
 //   VAPID_PUBLIC_KEY           same public key shipped in src/pushConfig.js
 //   VAPID_PRIVATE_KEY          the matching private key (secret)
@@ -27,7 +27,7 @@
 
 import webpush from 'web-push';
 
-const PARTY_BASE = (process.env.PARTY_BASE || 'https://verserain-party.hungry4grace.partykit.dev/parties/main/global-auth-db').replace(/\/+$/, '');
+const PARTY_BASE = (process.env.PARTY_BASE || 'https://verserain-party.verserain.workers.dev/parties/main/global-auth-db').replace(/\/+$/, '');
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';

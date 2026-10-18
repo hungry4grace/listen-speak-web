@@ -1,7 +1,7 @@
 {
   "name": "listen-speak-web",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,13 +13,15 @@
     "preview": "vite preview",
     "test:party": "node --test src/party/*.test.mjs",
     "test:lib": "node --test src/lib/*.test.mjs",
-    "deploy:party": "partykit deploy"
+    "deploy:party": "npx wrangler@4 deploy",
+    "dev:party": "npx wrangler@4 dev"
   },
   "dependencies": {
     "@upstash/redis": "^1.37.0",
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^1.7.0",
     "opencc-js": "^1.3.0",
+    "partyserver": "0.5.10",
     "partysocket": "^1.1.16",
     "pinyin-pro": "^3.29.3",
     "qr-scanner": "^1.4.2",
