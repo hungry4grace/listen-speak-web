@@ -59,9 +59,40 @@ export function fixChineseNamesForSpeech(text) {
   return String(text || '').replace(/耶和(?=[華华])/g, '耶合');
 }
 
-// Entry point for every utterance: only Chinese gets the substitutions.
+// Hebrew: the divine name יהוה is never pronounced. Reading Scripture aloud,
+// Jews say Adonai (אֲדֹנָי) — the vowels the Masoretes put on the name — and
+// Elohim (אֱלֹהִים) where it stands next to אדני (אֲדֹנָי יְהוִה, "Lord GOD"), so
+// it isn't read "Adonai Adonai". Prefix letters stay (וַיהוָה → וַאֲדֹנָי, "va-
+// Adonai"); their pointing already matches Adonai. Works on pointed and
+// unpointed text. No lookbehind: older iOS Safari can't parse it.
+const HE_MARKS = '\\u0591-\\u05BD\\u05BF\\u05C1\\u05C2\\u05C4\\u05C5\\u05C7';
+const M = `[${HE_MARKS}]*`;
+const NOT_WORD = `(^|[^\\u05D0-\\u05EA${HE_MARKS}])`;
+const WORD_END = '(?![\\u05D0-\\u05EA])';
+const NAME = `י${M}ה${M}ו${M}ה${M}`;
+const ADNY = `א${M}ד${M}נ${M}י${M}`;
+const SEP = '[\\s\\u05BE]+';
+const ADONAI = 'אֲדֹנָי';
+const ELOHIM = 'אֱלֹהִים';
+// The classes list Hebrew points/cantillation on purpose (each is matched as
+// its own code point), which this rule can't tell from a mistake.
+/* eslint-disable no-misleading-character-class */
+const RE_ADNY_NAME = new RegExp(`${NOT_WORD}(${ADNY}${SEP})${NAME}${WORD_END}`, 'g');
+const RE_NAME_ADNY = new RegExp(`${NOT_WORD}${NAME}(${SEP}${ADNY})${WORD_END}`, 'g');
+const RE_NAME = new RegExp(`${NOT_WORD}((?:[ובכלמש]${M}){0,3})${NAME}${WORD_END}`, 'g');
+/* eslint-enable no-misleading-character-class */
+
+export function fixHebrewDivineNameForSpeech(text) {
+  return String(text || '')
+    .replace(RE_ADNY_NAME, `$1$2${ELOHIM}`)
+    .replace(RE_NAME_ADNY, `$1${ELOHIM}$2`)
+    .replace(RE_NAME, `$1$2${ADONAI}`);
+}
+
+// Entry point for every utterance: Chinese and Hebrew get substitutions.
 export function toSpeechText(text, lang, opts) {
   const l = String(lang || '');
+  if (l.startsWith('he')) return fixHebrewDivineNameForSpeech(text);
   if (!l.startsWith('zh')) return String(text || '');
   return fixChineseHeteronymsForSpeech(fixChineseNamesForSpeech(text), opts);
 }
