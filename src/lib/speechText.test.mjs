@@ -117,3 +117,9 @@ test('和 is hé in Bible text; textbook prose keeps the voice reading', () => {
   assert.strictEqual(toSpeechText('耶和華', 'zh-TW', { defaultReading: 'de' }), '耶合華');
   assert.strictEqual(toSpeechText('神和人', 'en-US'), '神和人');
 });
+
+test('行 is xíng in Bible text (同行, 行走); prose keeps the voice reading', () => {
+  assert.strictEqual(toSpeechText('與神同行', 'zh-TW'), '與神同形');
+  assert.strictEqual(toSpeechText('行公義，好憐憫', 'zh-TW'), '形公義，好憐憫');
+  assert.strictEqual(toSpeechText('一行字', 'zh-TW', { defaultReading: 'de' }), '一行字');
+});

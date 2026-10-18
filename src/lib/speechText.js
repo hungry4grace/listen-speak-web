@@ -87,9 +87,11 @@ export function fixChineseWordsForSpeech(text, { defaultReading = 'di' } = {}) {
   for (const [from, to] of WORD_FIXES) if (s.includes(from)) s = s.split(from).join(to);
   s = s.replace(SA_NAMES, (m) => m.replace('撒', '仨')).replace(ISAAC, '$1以仨');
   // Bible text: 和 is read hé (你和我, 神和人), as churches read it; Taiwan
-  // voices say the conjunction hàn. Textbook prose (defaultReading 'de',
-  // 創意華文) keeps the voice's reading — schools teach hàn.
-  if (defaultReading === 'di') s = s.replace(/和/g, '合');
+  // voices say the conjunction hàn. 行 is always xíng in Scripture (同行,
+  // 行走, 行事), never háng, so it is spoken as 形. Textbook prose
+  // (defaultReading 'de', 創意華文) keeps the voice's readings — schools
+  // teach hàn, and prose has 銀行 / 一行字.
+  if (defaultReading === 'di') s = s.replace(/和/g, '合').replace(/行/g, '形');
   return s;
 }
 
