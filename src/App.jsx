@@ -645,6 +645,7 @@ function ManualVideo({ src, poster, caption }) {
 
 const SUPPORTED_UI_LANGS = ['zh', 'cuvs', 'en'];
 import { PARTY_ORIGIN, PARTY_WS_HOST, PARTY_DB } from './lib/partyHost.js';
+import { toSpeechText } from './lib/speechText.js';
 
 // Document title per UI language — index.html ships the zh title, so without
 // this the browser tab stays Chinese for everyone (including recipients of a
@@ -1014,7 +1015,7 @@ function retryWithDefaultVoice(stuckUtterance, text, rate, lang) {
   stuckUtterance.onend = null;
   stuckUtterance.onerror = null;
   window.speechSynthesis.cancel();
-  const retry = new SpeechSynthesisUtterance(text);
+  const retry = new SpeechSynthesisUtterance(toSpeechText(text, lang));
   retry.lang = lang;
   retry.rate = rate;
   retry.volume = 1;
@@ -1058,7 +1059,7 @@ function speakTextTimed(text, rate = 1.0, lang = 'zh-TW', voiceOverride = null) 
     }
 
     await ensureSpeechVoices();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(toSpeechText(text, lang));
     utterance.lang = lang;
     utterance.rate = rate;
     utterance.volume = 1;
@@ -1134,7 +1135,7 @@ function speakText(text, rate = 1.0, lang = 'zh-TW') {
       await ensureSpeechVoices();
       stopSpeechIfActive();
 
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(toSpeechText(text, lang));
       utterance.lang = lang;
       utterance.rate = rate;
 
@@ -10096,7 +10097,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.10
+                    v0.1.11
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -12366,7 +12367,7 @@ const zhcnDict = {
                                   let i = 0;
                                   const speakNext = () => {
                                     if (i >= chunks.length) { setDescTtsState('idle'); return; }
-                                    const u = new SpeechSynthesisUtterance(chunks[i++]);
+                                    const u = new SpeechSynthesisUtterance(toSpeechText(chunks[i++], lang));
                                     u.lang = lang;
                                     u.rate = 1.0;
                                     try { const v = pickSpeechVoice(lang); if (v) u.voice = v; } catch {}
