@@ -41,7 +41,7 @@ const CARD_STRINGS = {
   en: { htmlLang: 'en', dir: 'ltr', site: 'Listen&Speak — Hear it, say it, keep it by heart', tap: ' (tap to listen)', desc: 'Tap to listen to this collection', open: 'Open Listen&Speak' },
 };
 
-const PARTY_BASE = (process.env.PARTY_BASE || 'https://listenspeak-party.hungry4grace.partykit.dev/parties/main/global-auth-db').replace(/\/+$/, '');
+const PARTY_BASE = (process.env.PARTY_BASE || 'https://listenspeak-party.verserain.workers.dev/parties/main/global-auth-db').replace(/\/+$/, '');
 
 export default async function handler(req, res) {
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'listenspeak.verserain.com';

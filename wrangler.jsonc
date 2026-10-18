@@ -1,0 +1,24 @@
+// The 聽說 (listenspeak) realtime/auth server on our own Cloudflare account
+// (PartyServer). Replaces PartyKit's hosted platform, which stopped taking
+// deploys on 16 Oct 2026. Deploy with:  npm run deploy:party
+//
+// Secrets (set once per account, never in this file):
+//   npx wrangler@4 secret put RESEND_API_KEY
+//   npx wrangler@4 secret put ADMIN_TOKEN
+//   npx wrangler@4 secret put LINE_CHANNEL_SECRET  (LINE login)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "listenspeak-party",
+  "main": "src/party/worker.js",
+  "compatibility_date": "2026-05-16",
+  "durable_objects": {
+    "bindings": [
+      // "Main" → URL party "main", so paths stay /parties/main/<room>.
+      { "name": "Main", "class_name": "Main" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Main"] }
+  ],
+  "observability": { "enabled": true }
+}

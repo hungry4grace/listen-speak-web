@@ -30,7 +30,7 @@
 //   node scripts/fix-hebrew-references.mjs            # dry run, prints a diff
 //   node scripts/fix-hebrew-references.mjs --publish  # POST the updated sets
 
-const HOST = 'https://verserain-party.hungry4grace.partykit.dev/parties/main/global-auth-db';
+const HOST = 'https://verserain-party.verserain.workers.dev/parties/main/global-auth-db';
 const PUBLISH = process.argv.includes('--publish');
 const ADMIN_EMAIL = process.env.VERSERAIN_ADMIN_EMAIL || '';
 

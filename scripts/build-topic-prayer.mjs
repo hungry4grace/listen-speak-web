@@ -20,7 +20,7 @@ import path from 'node:path';
 import { taiwaneseTextForReference, unknownGlyphs } from './taibible.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
-const HOST = 'https://verserain-party.hungry4grace.partykit.dev/parties/main/global-auth-db';
+const HOST = 'https://verserain-party.verserain.workers.dev/parties/main/global-auth-db';
 const PUBLISH = process.argv.includes('--publish');
 
 // ── The 10 prayer passages ────────────────────────────────────────────────
