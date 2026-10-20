@@ -2659,6 +2659,24 @@ export default class Server {
 
     }
 
+    // POST .../global-lobby {type:'PULSE'} — a map ripple from a tab that is
+    // not holding the lobby socket (only open maps do, so this Durable Object
+    // can sleep). Relayed to whoever is watching the map; a no-op otherwise.
+    if (this.room.id === 'global-lobby' && request.method === 'POST') {
+      let data = {};
+      try { data = JSON.parse(await request.text()); } catch { data = {}; }
+      if (data && data.type === 'PULSE' && [...this.room.getConnections()].length) {
+        const nowTs = Date.now();
+        const name = String(data.name || '').slice(0, 40);
+        if (!this._lastPulse) this._lastPulse = {};
+        if (nowTs - (this._lastPulse['post:' + name] || 0) >= 400) {
+          this._lastPulse['post:' + name] = nowTs;
+          this.room.broadcast(JSON.stringify({ type: 'PULSE', name, action: String(data.action || '').slice(0, 12), ts: nowTs }));
+        }
+      }
+      return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
     // Default route for other random requests to gameplay rooms (if any)
     return new Response("Listen&Speak Gameplay Room HTTP endpoint OK", { status: 200 });
   }

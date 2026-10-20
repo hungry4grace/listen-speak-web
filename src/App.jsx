@@ -645,6 +645,7 @@ function ManualVideo({ src, poster, caption }) {
 
 const SUPPORTED_UI_LANGS = ['zh', 'cuvs', 'en'];
 import { PARTY_ORIGIN, PARTY_WS_HOST, PARTY_DB } from './lib/partyHost.js';
+import { sendPulse } from './lib/pulse.js';
 import { toSpeechText } from './lib/speechText.js';
 
 // Document title per UI language — index.html ships the zh title, so without
@@ -5616,7 +5617,7 @@ export default function App() {
       : type === 'champ' ? 'fruit'        // 創新高 / 得新果子 → 鼓聲
       : type === 'completed' ? 'done' : null;
     if (pulseKind && playerNameRef.current) {
-      try { socketRef.current?.send(JSON.stringify({ type: 'PULSE', name: playerNameRef.current, action: pulseKind })); } catch {}
+      sendPulse(socketRef.current, playerNameRef.current, pulseKind);
     }
     setGardenData(prev => {
       const updated = { ...prev };
@@ -7594,7 +7595,13 @@ export default function App() {
   const socketRef = useRef(null);
   const pendingInvitePKRef = useRef(null);
 
+  // The shared lobby only carries the map's ripples, and an open socket keeps
+  // its Durable Object awake (billed) around the clock. So only a game room or
+  // an open map holds a socket; ripples from anywhere else go out as one-off
+  // POSTs (sendPulse).
+  const socketWanted = Boolean(multiplayerRoomId) || mainTab === 'map';
   useEffect(() => {
+    if (!socketWanted) return undefined;
     const targetRoom = multiplayerRoomId || "global-lobby";
     const socketQuery = { name: playerName || "Player" + Math.floor(Math.random() * 999) };
     if (multiplayerRoomId) {
@@ -7887,7 +7894,7 @@ export default function App() {
       setWsConnected(false);
       multiplayerSoloActiveRef.current = false;
     };
-  }, [multiplayerRoomId, multiplayerRoomMode, multiplayerRoomRole, multiplayerTeamCount, multiplayerHostPlays, playerName, personalCode, triggerLightning]);
+  }, [socketWanted, multiplayerRoomId, multiplayerRoomMode, multiplayerRoomRole, multiplayerTeamCount, multiplayerHostPlays, playerName, personalCode, triggerLightning]);
 
   // Process Challenge URL parameter
   useEffect(() => {
@@ -10097,7 +10104,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.14
+                    v0.1.15
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
