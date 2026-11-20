@@ -15,6 +15,9 @@ import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } fro
 import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf } from './lib/lang.js';
 import { localizeSet, itemZh, itemEn, pickText, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
 import Annotated from './Annotated.jsx';
+import { voicedFraction } from './lib/readAlong.js';
+import { createReadAlong } from './lib/readAlongDom.js';
+import { readHandOn, readReadHandChoice, saveReadHandChoice } from './lib/readHand.js';
 import { loadAnnotator } from './lib/annotate.js';
 import './index.css';
 import I18N_FILLINS from './i18nFillins';
@@ -1050,8 +1053,12 @@ function estimateSpeechDuration(text, lang) {
   return Math.max(1800, Math.min(estimated + 2200, 30000));
 }
 
-function speakTextTimed(text, rate = 1.0, lang = 'zh-TW', voiceOverride = null) {
+// hooks (小小手 read-along): { onStart(), onBoundary(charIndex), onEnd() } —
+// the utterance's own events. charIndex is a UTF-16 offset into the SPOKEN
+// string (toSpeechText(text, lang)), not into `text`.
+function speakTextTimed(text, rate = 1.0, lang = 'zh-TW', voiceOverride = null, hooks = null) {
   return new Promise(async resolve => {
+    const hook = (name, arg) => { try { hooks?.[name]?.(arg); } catch { /* a read-along slip must never break speech */ } };
     const startedAt = Date.now();
     const minHoldMs = Math.min(estimateSpeechDuration(text, lang), 2200);
     if (!('speechSynthesis' in window)) {
@@ -1090,8 +1097,9 @@ function speakTextTimed(text, rate = 1.0, lang = 'zh-TW', voiceOverride = null) 
       resolve();
     };
 
-    utterance.onstart = () => { started = true; };
-    utterance.onend = () => { ended = true; safeResolve(); };
+    utterance.onstart = () => { started = true; hook('onStart'); };
+    if (hooks) utterance.onboundary = (ev) => hook('onBoundary', ev.charIndex);
+    utterance.onend = () => { ended = true; hook('onEnd'); safeResolve(); };
     // Chrome may fire onerror immediately when audio is blocked.
     // Keep a human pace fallback instead of resolving instantly.
     utterance.onerror = () => {
@@ -1104,8 +1112,9 @@ function speakTextTimed(text, rate = 1.0, lang = 'zh-TW', voiceOverride = null) 
       setTimeout(() => {
         if (started || ended || resolved) return;
         const retry = retryWithDefaultVoice(utterance, text, rate, lang);
-        retry.onstart = () => { started = true; };
-        retry.onend = () => { ended = true; safeResolve(); };
+        retry.onstart = () => { started = true; hook('onStart'); };
+        if (hooks) retry.onboundary = (ev) => hook('onBoundary', ev.charIndex);
+        retry.onend = () => { ended = true; hook('onEnd'); safeResolve(); };
         retry.onerror = () => setTimeout(safeResolve, 1500);
       }, VOICE_START_TIMEOUT_MS + 50);
     }
@@ -1769,6 +1778,9 @@ function VerseSetContinuousRainPlayer({
   onListenLogged,
   playDurationMinutes = null,
   initialFontSizeLevel = DEFAULT_PLAY_FONT_CHOICE,
+  // 小小手: the listener's choice ('1' | '0' | null = never chose) — see
+  // readHandOn. Not passed → the saved one.
+  readHandChoice,
   playOnce = false,
   onComplete,
   label,
@@ -2251,6 +2263,15 @@ function VerseSetContinuousRainPlayer({
           onPhrase(nextPhraseIdx);
           nextPhraseIdx += 1;
         }
+        // 小小手: follow the phrase being HEARD right now (a phrase can be on
+        // screen a moment before its first word).
+        if (timing.onProgress) {
+          const units = schedule.units;
+          let k = -1;
+          for (let j = 0; j < units.length && t >= units[j].start; j++) k = j;
+          if (k >= 0) timing.onProgress(k, voicedFraction(t, units[k].start, units[k].end, schedule.estimated ? null : analysis?.pauses), !schedule.estimated);
+          else if (nextPhraseIdx > 0) timing.onProgress(0, 0, !schedule.estimated);
+        }
         if (voiceDebug) {
           const i = Math.max(0, nextPhraseIdx - 1);
           const u = schedule.units[i];
@@ -2432,6 +2453,13 @@ function VerseSetContinuousRainPlayer({
   // 對調後的「有效」語言與片語。currentVerse/導覽/錄音鍵完全不動,只換「哪個語言當主片語」。
   const activePrimaryVersion = swapped ? secondaryVersion : version;
   const primaryAnnotation = annotationOf(activePrimaryVersion);
+  // 小小手 follows the language being READ (the second language when swapped).
+  const [savedHandChoice] = useState(readReadHandChoice);
+  const handOn = readHandOn(readHandChoice === undefined ? savedHandChoice : readHandChoice, activePrimaryVersion);
+  const handOnRef = useRef(handOn);
+  handOnRef.current = handOn;
+  const handLangRef = useRef('');
+  handLangRef.current = getVoiceLangForVersion(activePrimaryVersion);
   const secondaryAnnotation = annotationOf(swapped ? version : secondaryVersion);
   const activeSecondaryVersion = swapped ? version : secondaryVersion;
   const primaryPhrases = swapped ? effectiveSecondaryPhrases : phrases;
@@ -2564,6 +2592,30 @@ function VerseSetContinuousRainPlayer({
   const playbackStartedAtRef = useRef(Date.now());
   const phraseContainerRef = useRef(null);
   const phraseNodeRefs = useRef([]);
+  // 小小手: marks the character / word being read and moves the hand under it
+  // (lib/readAlongDom.js works on the DOM directly — no re-render per step).
+  const handRef = useRef(null);
+  const readAlongRef = useRef(null);
+  useEffect(() => {
+    const ra = createReadAlong({
+      getPhraseNode: (i) => phraseNodeRefs.current[i],
+      getContainer: () => phraseContainerRef.current,
+      getHand: () => handRef.current,
+      getLang: () => handLangRef.current,
+    });
+    readAlongRef.current = ra;
+    return () => { ra.clear(); readAlongRef.current = null; };
+  }, []);
+  useEffect(() => { if (!handOn) readAlongRef.current?.clear(); }, [handOn]);
+  // The words moved (font size, page flip, second language, width): put the
+  // hand back under the unit it is on — or hide it if that unit left the page.
+  useEffect(() => { readAlongRef.current?.reposition(); }, [fontSizeLevel, hasSecondaryPhrases, phrasePageStart, phrasePageEnd, phraseContainerWidth]);
+  const [handDebug, setHandDebug] = useState(null);
+  useEffect(() => {
+    if (!voiceDebug) return undefined;
+    const id = window.setInterval(() => setHandDebug(readAlongRef.current?.getDebug() || null), 500);
+    return () => window.clearInterval(id);
+  }, [voiceDebug]);
   // Refs for values used inside the auto-play effect but that should NOT re-trigger it
   const phrasesRef = useRef(primaryPhrases);
   const versesRef = useRef(verses);
@@ -2666,6 +2718,7 @@ function VerseSetContinuousRainPlayer({
     phrasePageStartRef.current = 0;
     phrasePageEndRef.current = 0;
     setIsPageFading(false);
+    readAlongRef.current?.clear();
     phraseNodeRefs.current = [];
     setIsSettled(false);
     setImageIndex(0);
@@ -2894,6 +2947,15 @@ function VerseSetContinuousRainPlayer({
           introText: formatVerseReferenceForSpeech(currentVerse.reference),
           isPageStart: (i) => i > 0 && pageForIndex(i).start === i,
           persist: recordingWriter(creatorRec, creatorRec === personalRec, isOwnVoice),
+          onProgress: (k, frac, measured) => {
+            const ra = handOnRef.current ? readAlongRef.current : null;
+            if (!ra || cancelled || runRef.current !== runId) return;
+            // The phrase being heard may be on the page just left: then wait
+            // on the first unit of the one now showing.
+            if (!ra.showAtFraction(k, currentPhrases[k], frac, { measured }) && k + 1 < currentPhrases.length) {
+              ra.showAtFraction(k + 1, currentPhrases[k + 1], 0, { measured });
+            }
+          },
         });
         if (cancelled || runRef.current !== runId) { stopLoadingHint(); return; }
       }
@@ -2904,8 +2966,8 @@ function VerseSetContinuousRainPlayer({
       // nothing: just hold each phrase for its estimated duration so the
       // background music carries the reading.
       const silent = mv?.type === 'silent';
-      const readAloud = (text, rate, lng, override) =>
-        silent ? wait(estimateSpeechDuration(text, lng)) : speakTextTimed(text, rate, lng, override);
+      const readAloud = (text, rate, lng, override, hooks) =>
+        silent ? wait(estimateSpeechDuration(text, lng)) : speakTextTimed(text, rate, lng, override, hooks);
       // TTS path — reflect it in the reader selector.
       if (!cancelled && runRef.current === runId) setActiveVoiceLabel(silent ? t('無聲音', 'No voice') : t('電腦語音', 'Computer voice'));
       // Resuming mid-verse: skip re-announcing the reference and pick the
@@ -2944,7 +3006,24 @@ function VerseSetContinuousRainPlayer({
           setPhrasePageEnd(pg.end); phrasePageEndRef.current = pg.end;
         }
         setActivePhrase(i);
-        await readAloud(currentPhrases[i], 0.86, lang, swappedRef.current ? swapVoiceRef.current : null);
+        // 小小手: follows the voice (silent mode: the paced hold).
+        const ra = handOnRef.current ? readAlongRef.current : null;
+        const stale = () => cancelled || runRef.current !== runId;
+        let follow = null;
+        let silentHand = 0;
+        if (ra && !silent) {
+          follow = ra.followTts(i, currentPhrases[i], 0.86, stale, { spoken: toSpeechText(currentPhrases[i], lang) });
+        } else if (ra) {
+          const hold = estimateSpeechDuration(currentPhrases[i], lang);
+          const from = performance.now();
+          silentHand = window.setInterval(() => {
+            if (stale()) { window.clearInterval(silentHand); return; }
+            ra.showAtFraction(i, currentPhrases[i], (performance.now() - from) / hold);
+          }, 60);
+        }
+        await readAloud(currentPhrases[i], 0.86, lang, swappedRef.current ? swapVoiceRef.current : null, follow);
+        follow?.finish();
+        if (silentHand) window.clearInterval(silentHand);
         if (cancelled || runRef.current !== runId) return;
         await wait(180);
       }
@@ -2953,6 +3032,7 @@ function VerseSetContinuousRainPlayer({
       if (cancelled || runRef.current !== runId) return;
       setActivePhrase(currentPhrases.length);
       setIsSettled(true);
+      readAlongRef.current?.clear();
       onListenLoggedRef.current?.();
       const durationLimit = playDurationMinutesRef.current;
       if (durationLimit && Date.now() - playbackStartedAtRef.current >= durationLimit * 60 * 1000) {
@@ -3003,6 +3083,7 @@ function VerseSetContinuousRainPlayer({
 
   const haltPlayback = () => {
     runRef.current += 1;
+    readAlongRef.current?.clear();
     pausedRecordingRef.current = false;
     // Any halt that isn't a pause (navigation, close, recording) starts the
     // next play from the top. togglePause re-sets this straight after.
@@ -3341,8 +3422,12 @@ function VerseSetContinuousRainPlayer({
             <div
               ref={phraseContainerRef}
               className={`daily-verse-rain-phrases continuous-rain-phrases ${hasSecondaryPhrases ? 'has-secondary' : ''} ${isSettled ? 'is-settled' : ''} ${isPageFading ? 'is-page-fading' : ''}`}
+              data-hand={handOn ? 'on' : undefined}
               aria-live="polite"
             >
+              {/* 小小手 — an <i>, so the `> span` phrase rules don't touch it; it is
+                  out of the flow and absent from the measuring mirror below. */}
+              {handOn && <i ref={handRef} className="ra-hand" aria-hidden="true"><i>👆</i></i>}
               {/* 整頁一次擺好(index 落在 [phrasePageStart..phrasePageEnd] 都在 DOM、占好
                   最終版位),已讀到的句子才淡入(is-revealed);未讀的占位不顯示。→ 逐句
                   就地淡入、鄰句不位移(no drop / no squeeze / no jump)。 */}
@@ -3360,7 +3445,7 @@ function VerseSetContinuousRainPlayer({
                   }}
                   className={`${index === activePhrase ? 'is-active' : ''} ${revealed ? 'is-revealed' : ''}`}
                 >
-                  <b><Annotated text={phrase} mode={primaryAnnotation} /></b>
+                  <b><Annotated text={phrase} mode={primaryAnnotation} perChar={handOn} /></b>
                   {secondaryPhrase && <small><Annotated text={secondaryPhrase} mode={secondaryAnnotation} /></small>}
                 </span>
                 );
@@ -3391,7 +3476,7 @@ function VerseSetContinuousRainPlayer({
                   : '';
                 return (
                   <span key={`m-${phrase}-${index}`}>
-                    <b><Annotated text={phrase} mode={primaryAnnotation} /></b>
+                    <b><Annotated text={phrase} mode={primaryAnnotation} perChar={handOn} /></b>
                     {secondaryPhrase && <small><Annotated text={secondaryPhrase} mode={secondaryAnnotation} /></small>}
                   </span>
                 );
@@ -3691,6 +3776,14 @@ function VerseSetContinuousRainPlayer({
       )}
 
       {/* ?voiceDebug=1 — how the recording lines up with the phrases (developer view) */}
+      {voiceDebug && !voiceDebugInfo && handDebug && (
+        <div className="voice-debug-panel">
+          <div>hand · phrase {handDebug.phrase + 1} · {handDebug.units} {handDebug.mode}s · {handDebug.msPerUnit} ms/unit</div>
+          <div>start {handDebug.startedBy || '—'} +{handDebug.startAfter ?? '—'} ms · end +{handDebug.endAfter ?? '—'} ms</div>
+          <div>boundaries {handDebug.follower.boundaries} · used {handDebug.follower.used}{handDebug.follower.distrusted ? ' · distrusted' : ''} · {handDebug.follower.first.join(' ')}</div>
+          <div>pace {handDebug.pace.unit} ms/unit + {handDebug.pace.overhead} ms</div>
+        </div>
+      )}
       {voiceDebug && voiceDebugInfo && (
         <div className="voice-debug-panel">
           <div>phrase {voiceDebugInfo.i + 1}/{voiceDebugInfo.n} · t {voiceDebugInfo.t.toFixed(2)}s</div>
@@ -7324,6 +7417,8 @@ export default function App() {
     }
   });
   const selectedPlayFont = PLAY_FONT_OPTIONS.find(option => option.value === playFontChoice) || PLAY_FONT_OPTIONS[2];
+  // 小小手 (播放方式): saved only when the listener actually chooses.
+  const [readHandChoice, setReadHandChoice] = useState(readReadHandChoice);
   useEffect(() => {
     try {
       localStorage.setItem('verseRainPlayFontSize', selectedPlayFont.value);
@@ -9970,6 +10065,7 @@ const zhcnDict = {
             startPaused={continuousRainSet.startPaused || false}
             playDurationMinutes={continuousRainSet.playDurationMinutes ?? null}
             initialFontSizeLevel={continuousRainSet.fontSizeLevel || DEFAULT_PLAY_FONT_CHOICE}
+            readHandChoice={readHandChoice}
             version={version}
             t={t}
             userEmail={userEmail}
@@ -10104,7 +10200,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.15
+                    v0.1.16
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -15173,6 +15269,38 @@ const zhcnDict = {
                         }}
                       >
                         {t(option.label, option.enLabel)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ margin: '0 0 1.1rem', textAlign: 'left' }}>
+                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.5rem', fontWeight: 600 }}>
+                  👆 {t('小小手', 'Pointing hand')}
+                  <span style={{ fontWeight: 400, marginLeft: '0.4rem' }}>{t('朗讀時指著正在唸的字', 'Points at the word being read')}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.45rem' }} data-testid="play-read-hand">
+                  {[true, false].map(on => {
+                    const active = readHandOn(readHandChoice, version) === on;
+                    return (
+                      <button
+                        key={on ? 'on' : 'off'}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setReadHandChoice(saveReadHandChoice(on))}
+                        style={{
+                          padding: '0.52rem 0.35rem',
+                          borderRadius: '999px',
+                          border: active ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                          background: active ? '#eff6ff' : '#fff',
+                          color: active ? '#1d4ed8' : '#475569',
+                          fontWeight: active ? 800 : 600,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {on ? t('開', 'On') : t('關', 'Off')}
                       </button>
                     );
                   })}
