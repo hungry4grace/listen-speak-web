@@ -1,5 +1,3 @@
-import { annotationOf } from './lang.js';
-
 // 小小手 — a pointing hand follows the character (Chinese) or word (English)
 // being read aloud in the listen player. Every 聽&說 language supports it.
 // The listener's own choice (播放方式): '1' on, '0' off, null = never chose.
@@ -17,9 +15,7 @@ export function saveReadHandChoice(on) {
   try { localStorage.setItem(KEY, v); } catch { /* the in-memory choice still works */ }
   return v;
 }
-// Until the listener chooses, the hand is on for 繁注 / 繁拼 / 简拼 (children
-// and learners of Chinese) and off for the plain languages.
-export function readHandOn(choice, version) {
-  if (choice === '1' || choice === '0') return choice === '1';
-  return annotationOf(version) !== null;
+// On in every language until the listener turns it off.
+export function readHandOn(choice) {
+  return choice !== '0';
 }
