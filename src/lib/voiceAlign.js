@@ -224,9 +224,20 @@ function voicedLength(from, to, pauses) {
 // + the phrases shown → { units: [{ start, end, onPause }], intro, cost }.
 // The end of the speech anchors the last phrase; the start is open — the
 // reader may first say the reference ("Psalm 23"), a heading, or nothing —
-// so the text is tried starting at the speech start and after each of the
-// first few pauses, and the best fit wins (an intro much longer than the
-// spoken reference costs a little extra).
+// so the text is tried starting at the speech start and after each early
+// pause, and the best fit wins.
+//
+// Whether the reference was said is the hard part: nothing here hears words.
+// What speaks for "the text starts after this pause":
+//   · the phrases fit the pauses that follow (alignUnits' cost);
+//   · what came before is about as long as the reference would take at this
+//     reader's pace — a short opening phrase is far too brief to be one;
+//   · the pause itself: readers stop clearly after the reference;
+//   · the pace it leaves for the text is one people actually read at. In a
+//     short verse the reference is a third of the recording or more, and
+//     taking it for phrase 1 makes the whole reading implausibly slow.
+const HUMAN_PACE = 0.23; // seconds per syllable, read aloud
+const PACE_RANGE = [0.125, 0.5];
 export function alignReading({ analysis, phrases, weights, strengths, introText = "", maxIntro = 8, missPenalty = 2, pauseBonus = 2, spread = 0.4 }) {
   const w = weights || phrases.map(p => syllables(p));
   const [s0, s1] = analysis.speech;
@@ -234,25 +245,75 @@ export function alignReading({ analysis, phrases, weights, strengths, introText 
     .filter(p => p.start > s0 + 0.05 && p.end < s1 - 0.05);
   const fine = all.filter(p => p.len >= 0.12);
   const run = (from) => alignUnits({ from, to: s1, weights: w, pauses: fine.filter(p => p.start > from), strengths, pauseBonus, missPenalty, spread });
-  let best = { ...run(s0), intro: null };
   const total = w.reduce((a, b) => a + b, 0) || 1;
-  const introW = introText ? syllables(introText) : 2;
-  const firstQuarter = s0 + (s1 - s0) * 0.25;
-  const cands = fine.filter(p => p.len >= 0.25 && p.start < firstQuarter).slice(0, maxIntro);
+  const plain = run(s0);
+  const bonusOf = (p) => pauseBonus * Math.min(p.len, 1.5) / 1.5;
+
+  if (!introText) {
+    // No reference to look for: only a heading set well apart counts.
+    let best = { ...plain, intro: null };
+    const firstQuarter = s0 + (s1 - s0) * 0.25;
+    for (const p of fine.filter(q => q.len >= 0.25 && q.start < firstQuarter).slice(0, maxIntro)) {
+      const r = run(p.end);
+      const rate = voicedLength(p.end, s1, fine) / total;
+      const ratio = voicedLength(s0, p.start, fine) / Math.max(0.3, 2 * rate);
+      const off = Math.max(0, Math.log(Math.max(ratio / 2.5, 0.5 / ratio, 1)));
+      const breaks = fine.filter(q => q.end <= p.end).reduce((a, q) => a + bonusOf(q), 0);
+      const cost = r.cost + 0.3 + Math.min(4, 3 * off * off) - breaks;
+      if (cost < best.cost) best = { ...r, cost, intro: { start: s0, end: p.start } };
+    }
+    return best;
+  }
+
+  const introW = syllables(introText);
+  // The reference can end anywhere in its share of the speech (and then some:
+  // readers slow down for it) — a quarter of the recording for a long passage,
+  // most of it for a one-line verse.
+  const share = introW / (introW + total);
+  const limit = s0 + (s1 - s0) * Math.min(0.7, Math.max(0.25, share * 1.5));
+  const cands = fine.filter(p => p.start < limit).slice(0, maxIntro);
+  // A pace nobody reads at, with and without the reference, says the syllable
+  // count is off (another script, weights in another unit): no opinion then.
+  const paceOf = (from) => voicedLength(from, s1, fine) / total;
+  const paceCost = (from) => {
+    if (weights) return 0;
+    const whole = paceOf(s0);
+    const here = paceOf(from);
+    if (Math.max(whole, here) < PACE_RANGE[0] || Math.min(whole, here) > PACE_RANGE[1]) return 0;
+    const z = Math.log(here / HUMAN_PACE) / 0.5;
+    return 0.5 * z * z;
+  };
+  const joins = (r) => r.units.filter(u => !u.onPause).length;
+  let top = null;
   for (const p of cands) {
     const r = run(p.end);
-    // How long the intro "should" take at this reader's pace vs how long it did.
-    const rate = voicedLength(p.end, s1, fine) / total;
-    const ratio = voicedLength(s0, p.start, fine) / Math.max(0.3, introW * rate);
-    // The pauses up to the text (after the reference, inside a heading) are
-    // breaks like any other — the same bonus as in alignUnits; an intro far
-    // shorter or longer than the reference costs a little.
-    const off = Math.max(0, Math.log(Math.max(ratio / 2.5, 0.5 / ratio, 1)));
-    const breaks = fine.filter(q => q.end <= p.end).reduce((a, q) => a + pauseBonus * Math.min(q.len, 1.5) / 1.5, 0);
-    const penalty = 0.3 + Math.min(4, 3 * off * off) - breaks;
-    if (r.cost + penalty < best.cost) best = { ...r, cost: r.cost + penalty, intro: { start: s0, end: p.start } };
+    // How long the reference "should" take at this reader's pace vs how long
+    // what came before the pause did. Short forms ("John 3 16") and headings
+    // read along with it leave a lot of room; a fraction of it does not.
+    const ratio = voicedLength(s0, p.start, fine) / Math.max(0.3, introW * paceOf(p.end));
+    const z = ratio < 0.55 ? Math.log(0.55 / ratio) / 0.35 : ratio > 2.5 ? Math.log(ratio / 2.5) / 0.5 : 0;
+    // Pauses inside what was read first (reference, then a heading) count a
+    // little; a pause inside a phrase counts for nothing, so counting them in
+    // full would always favour starting the text later.
+    const inner = 0.3 * fine.filter(q => q.end < p.end).reduce((a, q) => a + bonusOf(q), 0);
+    // A brief pause is not where the reference ends when a far longer one
+    // follows within a second or so: the reader was still saying it.
+    const next = fine.find(q => q.start > p.end);
+    const outdone = next && next.start < limit && next.start - p.end <= 1.2 && p.len < 0.4 && next.len >= Math.max(0.5, 3 * p.len) ? 2 : 0;
+    const score = r.cost + 0.3 + 0.5 * z * z - inner - bonusOf(p) + paceCost(p.end) + outdone;
+    if (!top || score < top.score) top = { r, score, p };
   }
-  return best;
+  const plainScore = plain.cost + paceCost(s0);
+  if (top) {
+    // A reader who runs phrases together leaves fewer pauses than phrases. The
+    // plain fit then spends the pause after the reference as a phrase break
+    // and saves a join further on; the best start after the reference gets
+    // that one join back — against the plain fit only, never against another
+    // start (or "all of it was the reference, the text ran on" would win).
+    const credit = joins(top.r) > joins(plain) ? missPenalty : 0;
+    if (top.score - credit < plainScore) return { ...top.r, cost: top.score - credit, intro: { start: s0, end: top.p.start } };
+  }
+  return { ...plain, cost: plainScore, intro: null };
 }
 
 // No usable analysis: spread the phrases over the speech (or the whole clip)
