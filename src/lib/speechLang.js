@@ -7,6 +7,7 @@ export function isEnglishBibleVersion(v) {
 }
 
 export function getSpeechLangForVersion(v) {
+  if (v === 'cuv-yue') return 'zh-HK'; // 繁體（粵語）
   const b = baseLang(v);
   if (b === 'en') return 'en-US';
   if (b === 'cuvs') return 'zh-CN';

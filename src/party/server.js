@@ -2,6 +2,14 @@ import { cleanVoiceAnalysis } from '../lib/voiceAnalysis.js';
 // Opaque, stable per-account id for the personal-voice layer: sha256(email)
 // prefix. Lets share links carry "whose voice" without exposing the email,
 // and survives playerName changes. The client computes the same value.
+
+// A recording bucket is a set id, or a set id tagged with the reading language
+// (`tang300-yuefu@yue` for 繁體（粵語）). Owner checks look up the set itself —
+// the tag is never part of a set id.
+export function setDocIdForVoiceBucket(bucket) {
+  return String(bucket).split('@')[0];
+}
+
 async function voiceOwnerId(email) {
   const data = new TextEncoder().encode(String(email || '').toLowerCase().trim());
   const buf = await crypto.subtle.digest('SHA-256', data);
@@ -1480,7 +1488,7 @@ export default class Server {
             // owner (or an admin) can always replace a foreign/stale recording,
             // e.g. one made under a different account of theirs.
             if (existing?.byEmail && existing.byEmail !== emailLc) {
-               const setDoc = await this.room.storage.get(`verseset:${String(setId)}`);
+               const setDoc = await this.room.storage.get(`verseset:${setDocIdForVoiceBucket(setId)}`);
                const isOwner = setDoc?.ownerEmail && String(setDoc.ownerEmail).toLowerCase() === emailLc;
                if (!isOwner && !isTrustedAdminEmail(email)) {
                   return new Response(JSON.stringify({ error: 'Only the original recorder or the set owner can replace this recording' }), { status: 403, headers: corsHeaders });
@@ -1523,7 +1531,7 @@ export default class Server {
             const key = `set-verse-voice:${String(setId)}:${refKey}`;
             const meta = await this.room.storage.get(key);
             if (!meta) return new Response(JSON.stringify({ success: true, deleted: false }), { status: 200, headers: corsHeaders });
-            const setDoc = await this.room.storage.get(`verseset:${String(setId)}`);
+            const setDoc = await this.room.storage.get(`verseset:${setDocIdForVoiceBucket(setId)}`);
             const authorized = (meta.byEmail && meta.byEmail === emailLc)
                || (setDoc?.ownerEmail && String(setDoc.ownerEmail).toLowerCase() === emailLc)
                || isTrustedAdminEmail(email);
@@ -1564,7 +1572,7 @@ export default class Server {
             const meta = await this.room.storage.get(key);
             if (!meta || meta.voiceId !== String(voiceId)) return new Response(JSON.stringify({ error: 'No such recording' }), { status: 404, headers: corsHeaders });
             if (layer !== 'personal') {
-               const setDoc = await this.room.storage.get(`verseset:${String(setId)}`);
+               const setDoc = await this.room.storage.get(`verseset:${setDocIdForVoiceBucket(setId)}`);
                const authorized = (meta.byEmail && meta.byEmail === emailLc)
                   || (setDoc?.ownerEmail && String(setDoc.ownerEmail).toLowerCase() === emailLc)
                   || isTrustedAdminEmail(email);
@@ -1854,7 +1862,7 @@ export default class Server {
             if (!setId || !ownerId) return new Response(JSON.stringify({ error: 'setId, ownerId required' }), { status: 400, headers: corsHeaders });
             let authorized = isCustomSetWriteAuthorized() || isTrustedAdminEmail(requesterEmail) || isTrustedAdminName(requesterName);
             if (!authorized && requesterEmail) {
-               const set = await this.room.storage.get(`verseset:${String(setId)}`);
+               const set = await this.room.storage.get(`verseset:${setDocIdForVoiceBucket(setId)}`);
                if (set && set.ownerEmail && String(set.ownerEmail).trim().toLowerCase() === String(requesterEmail).trim().toLowerCase()) {
                   authorized = true;
                }
@@ -1970,7 +1978,7 @@ export default class Server {
                || actorOwnerId === String(targetOwnerId)
                || isCustomSetWriteAuthorized() || isTrustedAdminEmail(email) || isTrustedAdminName(name);
             if (!authorized) {
-               const set = await this.room.storage.get(`verseset:${String(setId)}`);
+               const set = await this.room.storage.get(`verseset:${setDocIdForVoiceBucket(setId)}`);
                if (set?.ownerEmail && vcLc(set.ownerEmail) === emailLc) authorized = true;
             }
             if (!authorized) return new Response(JSON.stringify({ error: 'Not authorized' }), { status: 403, headers: corsHeaders });

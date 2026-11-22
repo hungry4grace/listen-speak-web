@@ -6,13 +6,13 @@ import PartySocket from 'partysocket';
 import QRCode from 'qrcode';
 import { QRCodeSVG } from 'qrcode.react';
 import { classifyGardenResponse, decideGardenSync, buildFruitAuthorKeys, aggregateFruitResults } from './lib/gardenSync.js';
-import { voiceId, voiceMatchesSavedKey, dedupeVoices, buildVoiceOptions } from './lib/voicePicker.js';
+import { voiceId, voiceMatchesSavedKey, dedupeVoices, buildVoiceOptions, isCantoneseLang, voiceFitsLang } from './lib/voicePicker.js';
 import { splitVersePhrases } from './lib/phraseSplitter.js';
 import { ANALYSIS_VERSION, analyzeDataUrl, cacheAnalysis, cachedAnalysis, cleanVoiceAnalysis, forgetCachedAnalysis } from './lib/voiceAnalysis.js';
 import { alignReading, boundaryStrengths, estimateReading, phraseShowTime } from './lib/voiceAlign.js';
 import { stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
-import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf } from './lib/lang.js';
+import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf, isCantoneseVersion, voiceBucketFor } from './lib/lang.js';
 import { localizeSet, itemZh, itemEn, pickText, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
 import Annotated from './Annotated.jsx';
 import { voicedFraction } from './lib/readAlong.js';
@@ -958,12 +958,12 @@ function pickSpeechVoice(lang) {
     // 中文 voice, choppy). Normal playback is unaffected: there lang always
     // matches the active version's language, so this still returns the save.
     if (exactByVersion
-        && String(exactByVersion.lang || '').toLowerCase().startsWith(langPrefix)
+        && voiceFitsLang(exactByVersion, lang)
         && isAllowed(exactByVersion)) return exactByVersion;
     // Legacy name-only save (`verseRain_voiceName`) could be stale state
     // from a different Bible version → validate before using.
     const byName = voices.find(v => v.name === savedVoiceKey);
-    if (byName && byName.lang?.toLowerCase().startsWith(langPrefix) && isAllowed(byName)) {
+    if (byName && voiceFitsLang(byName, lang) && isAllowed(byName)) {
       return byName;
     }
   }
@@ -971,7 +971,7 @@ function pickSpeechVoice(lang) {
   // Standard lang-prefix match.
   const exact = voices.find(v => v.lang?.toLowerCase() === String(lang).toLowerCase() && isAllowed(v));
   if (exact) return exact;
-  const prefix = voices.find(v => v.lang?.toLowerCase().startsWith(langPrefix) && isAllowed(v));
+  const prefix = voices.find(v => voiceFitsLang(v, lang) && isAllowed(v));
   if (prefix) return prefix;
 
   // Name-based fallback for languages where the OS often lacks a properly-
@@ -1835,7 +1835,8 @@ function VerseSetContinuousRainPlayer({
   // and the phrase blocks advance proportionally to the recording length.
   // voiceSetId lets synthetic single-verse wrappers point back at the real
   // originating set where the recordings actually live.
-  const voiceSetId = verseSet?.voiceSetId || verseSet?.id || null;
+  // 繁體（粵語） readers hear (and record into) the set's Cantonese bucket.
+  const voiceSetId = voiceBucketFor(verseSet?.voiceSetId || verseSet?.id || null, version);
   // Where MY personal recordings live. Real curated sets (topic slugs like
   // "gospel-of-john", random-base36 custom ids) use their own bucket. Ephemeral
   // wrappers — no id, or a synthetic `single-<ref>` / `daily-<date>` — aren't
@@ -1843,7 +1844,8 @@ function VerseSetContinuousRainPlayer({
   // bucket, keyed by reference. That keeps the record button always present and
   // lets a loose recording surface wherever the verse reappears. Always truthy.
   const isEphemeralSetId = (id) => !id || /^(single|daily)-/.test(String(id));
-  const personalVoiceSetId = isEphemeralSetId(voiceSetId) ? PERSONAL_LOOSE_SET_ID : voiceSetId;
+  const looseVoiceSetId = voiceBucketFor(PERSONAL_LOOSE_SET_ID, version);
+  const personalVoiceSetId = isEphemeralSetId(voiceSetId) ? looseVoiceSetId : voiceSetId;
   const verseVoicesRef = useRef({});
   // 最新公開人聲 — the newest public recording per verse across the author AND
   // every contributor (from /sets/voice-latest). When there's no personal/shared
@@ -1929,9 +1931,9 @@ function VerseSetContinuousRainPlayer({
     // user made on this verse as a LOOSE verse (random/search/single). The set's
     // own bucket wins per-reference. Each recording is tagged with the bucket
     // its audio actually lives in, so playback fetches from the right place.
-    const buckets = personalVoiceSetId !== PERSONAL_LOOSE_SET_ID
-      ? [PERSONAL_LOOSE_SET_ID, personalVoiceSetId]   // loose first, real set overwrites
-      : [PERSONAL_LOOSE_SET_ID];
+    const buckets = personalVoiceSetId !== looseVoiceSetId
+      ? [looseVoiceSetId, personalVoiceSetId]   // loose first, real set overwrites
+      : [looseVoiceSetId];
     // The server hides an owner's private recordings from everyone else, so
     // say who's asking: `email` when loading my own (otherwise I'd lose my own
     // unshared readings), and the share link's voiceId when loading someone
@@ -5417,13 +5419,13 @@ export default function App() {
   const editorUploadJobRef = useRef({}); // reference → in-flight save promise
   useEffect(() => {
     let cancelled = false;
-    const setId = editingCustomSet?.id;
+    const setId = voiceBucketFor(editingCustomSet?.id, version);
     if (!setId) { setEditorVerseVoices({}); return undefined; }
     setVoiceApi.getAll(setId)
       .then(res => { if (!cancelled) setEditorVerseVoices(res?.voices || {}); })
       .catch(() => { if (!cancelled) setEditorVerseVoices({}); });
     return () => { cancelled = true; };
-  }, [editingCustomSet?.id]);
+  }, [editingCustomSet?.id, version]);
   // Two-tap delete confirm for verse rows: first tap arms (shows 確定?), second
   // tap removes. In-app (no window.confirm — that's a silent no-op in iOS WKWebView).
   const [confirmDeleteIdx, setConfirmDeleteIdx] = useState(null);
@@ -6177,7 +6179,7 @@ export default function App() {
     setCurrentSetVoices({});
     setCurrentSetVoiceRefs(new Set());
     setMyVoicesInSet({});
-    const id = currentSet?.id;
+    const id = voiceBucketFor(currentSet?.id, version);
     if (!id) return undefined;
     setVoiceApi.getAll(id)
       .then(res => { if (!cancelled) setCurrentSetVoices(res?.voices || {}); })
@@ -6196,7 +6198,8 @@ export default function App() {
           // Both buckets, same as the player: a recording made on a loose verse
           // (random/search) shows up inside a real set too, and the badge has to
           // agree with what the player will actually play.
-          const buckets = id !== PERSONAL_LOOSE_SET_ID ? [PERSONAL_LOOSE_SET_ID, id] : [PERSONAL_LOOSE_SET_ID];
+          const loose = voiceBucketFor(PERSONAL_LOOSE_SET_ID, version);
+          const buckets = id !== loose ? [loose, id] : [loose];
           const out = {};
           for (const bucket of buckets) {
             const res = await userVoiceApi.getAll(bucket, mine, { email: userEmail }).catch(() => null);
@@ -6207,7 +6210,7 @@ export default function App() {
       })();
     }
     return () => { cancelled = true; };
-  }, [currentSet?.id, voiceRefreshTick, userEmail]);
+  }, [currentSet?.id, voiceRefreshTick, userEmail, version]);
   // Toggle one of my own recordings listed/unlisted straight from the verse row.
   const [voiceVisibilityBusy, setVoiceVisibilityBusy] = useState('');
   const toggleMyVerseVoicePublic = React.useCallback(async (reference) => {
@@ -6216,7 +6219,7 @@ export default function App() {
     const next = rec.public === false;
     setVoiceVisibilityBusy(reference);
     try {
-      await userVoiceApi.setVisibility(userEmail, rec.voiceBucket || currentSet?.id, reference, next);
+      await userVoiceApi.setVisibility(userEmail, rec.voiceBucket || voiceBucketFor(currentSet?.id, version), reference, next);
       setMyVoicesInSet(prev => ({ ...prev, [reference]: { ...prev[reference], public: next } }));
       // The ⭐ (and everyone else's picker) reflects public recordings only, so
       // refetch the shared listings too.
@@ -7033,7 +7036,8 @@ export default function App() {
 
   // Play the creator's recording for (setId, reference) if one exists;
   // returns false so the caller can fall back to TTS.
-  const playSetVerseVoice = async (setId, reference) => {
+  const playSetVerseVoice = async (rawSetId, reference) => {
+    const setId = voiceBucketFor(rawSetId, version);
     if (!setId || !reference) return false;
     try {
       let voices = setVoicesLookupRef.current.get(setId);
@@ -7065,7 +7069,8 @@ export default function App() {
   // Collect every recording available for (setId, reference): the set author's
   // (creator layer) plus each public contributor's (personal layer). Used by the
   // single-verse 🎧 to decide between "just play" and "let the listener choose".
-  const gatherVerseVoiceOptions = async (setId, reference) => {
+  const gatherVerseVoiceOptions = async (rawSetId, reference) => {
+    const setId = voiceBucketFor(rawSetId, version);
     const options = [];
     if (!setId || !reference) return options;
     try {
@@ -7097,7 +7102,8 @@ export default function App() {
 
   // Play one gathered option's audio (owner or personal share alike live in the
   // shared set-voice store keyed by setId). Returns false so callers can TTS.
-  const playVerseVoiceOption = async (setId, opt) => {
+  const playVerseVoiceOption = async (rawSetId, opt) => {
+    const setId = voiceBucketFor(rawSetId, version);
     if (!opt?.voiceId) return false;
     try {
       let dataUrl = setVoiceAudioLookupRef.current.get(opt.voiceId);
@@ -7307,7 +7313,10 @@ export default function App() {
     }
   });
   const langPrefixForVersion = (v) => (isEnglishBibleVersion(v) ? 'en' : 'zh');
-  const filteredVoicesForVersion = dedupeVoices(availableVoices.filter(vc => (vc.lang || '').toLowerCase().startsWith(langPrefixForVersion(version))));
+  // 繁體（粵語） lists only Cantonese voices — Mandarin ones share the zh prefix.
+  const filteredVoicesForVersion = dedupeVoices(availableVoices.filter(vc => (isCantoneseVersion(version)
+    ? isCantoneseLang(vc.lang)
+    : (vc.lang || '').toLowerCase().startsWith(langPrefixForVersion(version)))));
   // Deduped + disambiguated display options for the voice <select> (fixes the
   // duplicate "Chinese Hong Kong" entries on Android).
   const voiceOptionsForVersion = buildVoiceOptions(filteredVoicesForVersion, { cloudLabel: '☁️' });
@@ -7439,7 +7448,7 @@ export default function App() {
     let cancelled = false;
     setVoiceOptions(null);
     setVoiceChoice(null);
-    const setId = playOrderChooser.voiceSetId || playOrderChooser.id;
+    const setId = voiceBucketFor(playOrderChooser.voiceSetId || playOrderChooser.id, version);
     (async () => {
       const [contribRes, ownerRes, mineId] = await Promise.all([
         userVoiceApi.getContributors(setId).catch(() => null),
@@ -7455,7 +7464,7 @@ export default function App() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playOrderChooser, userEmail]);
+  }, [playOrderChooser, userEmail, version]);
   const startContinuousPlay = (set, order) => {
     if (!set?.verses?.length) return;
     const vc = voiceChoice;
@@ -8225,7 +8234,7 @@ export default function App() {
         const targetVerse = allVerses.find(v => v.reference === challengeRef);
         if (targetVerse) {
           const isEnglish = /^[a-zA-Z]/.test(targetVerse.reference);
-          if ((isEnglish && !isEnglishBibleVersion(version)) || (!isEnglish && version !== 'cuv')) {
+          if ((isEnglish && !isEnglishBibleVersion(version)) || (!isEnglish && version !== 'cuv' && !isCantoneseVersion(version))) {
             setVersion(isEnglish ? 'en' : 'cuv');
             return;
           }
@@ -10200,7 +10209,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.19
+                    v0.1.20
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -11071,7 +11080,7 @@ const zhcnDict = {
                                   // realtime bake takes ~as long as the clip, so we never
                                   // block the creator. Capture the raw reference + setId now.
                                   const ref = editorVoiceTarget.reference;
-                                  const setId = editingCustomSet.id;
+                                  const setId = voiceBucketFor(editingCustomSet.id, version);
                                   const recordedBy = playerName || (userEmail || '').split('@')[0] || 'Anonymous';
                                   const email = userEmail || '';
                                   const seq = (editorSaveSeqRef.current[ref] || 0) + 1;
@@ -12506,7 +12515,7 @@ const zhcnDict = {
 
                               return (
                                 <tr key={i} style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: isSelected ? '#eff6ff' : (i % 2 === 0 ? '#ffffff' : '#f8fafc'), transition: 'background 0.2s', cursor: 'pointer' }} onClick={() => toggleSelection(v.reference)}>
-                                  <td style={{ padding: '0.8rem 1rem', fontWeight: 'bold', color: '#1e293b', fontSize: '0.95rem' }} onClick={(e) => { e.stopPropagation(); setVerseViewModal({ ...v, setId: currentSet?.id }); }}>
+                                  <td style={{ padding: '0.8rem 1rem', fontWeight: 'bold', color: '#1e293b', fontSize: '0.95rem' }} onClick={(e) => { e.stopPropagation(); setVerseViewModal({ ...v, setId: voiceBucketFor(currentSet?.id, version) }); }}>
                                     <button style={{ background: 'none', border: 'none', padding: 0, margin: 0, color: '#3b82f6', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold', fontSize: 'inherit', fontFamily: 'inherit' }}>
                                       {formatVerseReferenceForDisplay(v.reference, version)}
                                     </button>

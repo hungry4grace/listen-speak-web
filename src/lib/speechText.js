@@ -130,5 +130,7 @@ export function toSpeechText(text, lang, opts) {
   const l = String(lang || '');
   if (l.startsWith('he')) return fixHebrewDivineNameForSpeech(text);
   if (!l.startsWith('zh')) return String(text || '');
+  // The swaps are Mandarin homophones (地→第 is dei6→dai6 in Cantonese).
+  if (/^zh[-_](hant[-_])?(hk|mo)/i.test(l)) return String(text || '');
   return fixChineseHeteronymsForSpeech(fixChineseWordsForSpeech(fixChineseNamesForSpeech(text), opts), opts);
 }

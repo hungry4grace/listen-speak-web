@@ -71,3 +71,18 @@ export function buildVoiceOptions(voices, { cloudLabel = '' } = {}) {
     return { id: voiceId(v), label, voice: v };
   });
 }
+
+// Cantonese (繁體（粵語）, zh-HK; Android also tags yue / yue-HK). Mandarin
+// voices share the "zh" prefix, so a plain prefix match would read the
+// Cantonese text with a 國語 voice.
+export function isCantoneseLang(lang) {
+  return /^(yue|zh[-_](hant[-_])?(hk|mo))(?![a-z])/i.test(String(lang || ''));
+}
+
+// Does voice speak lang? Same language prefix, except Cantonese, which needs
+// a Cantonese voice.
+export function voiceFitsLang(voice, lang) {
+  const voiceLang = String(voice?.lang || '').toLowerCase();
+  if (isCantoneseLang(lang)) return isCantoneseLang(voiceLang);
+  return voiceLang.startsWith(String(lang || '').toLowerCase().split('-')[0]);
+}
