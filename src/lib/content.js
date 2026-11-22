@@ -60,3 +60,12 @@ export function normalizeItemsForSave(items, sourceLang) {
       return textCn ? { reference: label, text: v.text, textEn: v.textEn, textCn } : { reference: label, text: v.text, textEn: v.textEn };
     });
 }
+
+// "English: Betty Tseng 曾培慈 (2011) · CC BY-NC-SA 3.0" for an item carrying a
+// credited translation (see content/tangTranslations.js), else ''. Every
+// translation shown in the app names its translator.
+export function translationCredit(v) {
+  const tr = v?.translation;
+  if (!tr?.translator) return '';
+  return `English: ${tr.translator}${tr.year ? ` (${tr.year})` : ''}${tr.license ? ` · ${tr.license}` : ''}`;
+}
