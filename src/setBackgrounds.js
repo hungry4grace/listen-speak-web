@@ -32,22 +32,37 @@ SET_BACKGROUND_THEMES.push(
   { id: 'jiuzhaigou', zh: '九寨溝（影片）', en: 'Jiuzhaigou (video)', url: '/backgrounds/jiuzhaigou-poster.jpg', video: '/backgrounds/jiuzhaigou.mp4' },
 );
 
-// 'preset:<id>' → URL, or null when unset/unknown (caller falls back to
-// the default rotating AI backgrounds).
-export function getSetBackgroundUrl(background) {
+// 古風名畫 backgrounds for the built-in packs (Tang poems, Dao De Jing): one
+// public-domain Chinese painting per set, cropped tall (900x1800) for phones.
+// Assigned in verseLoader.js; not offered in the editor's picker.
+export const BUILT_IN_BACKGROUNDS = [
+  { id: 'guofeng-wujue', painting: '馬遠《寒江獨釣圖》' },
+  { id: 'guofeng-qijue', painting: '王希孟《千里江山圖》（局部）' },
+  { id: 'guofeng-wulu', painting: '倪瓚《容膝齋圖》' },
+  { id: 'guofeng-qilu', painting: '郭熙《早春圖》' },
+  { id: 'guofeng-wugu', painting: '范寬《谿山行旅圖》' },
+  { id: 'guofeng-qigu', painting: '沈周《廬山高圖》' },
+  { id: 'guofeng-yuefu', painting: '佚名《明皇幸蜀圖》' },
+  { id: 'guofeng-dao', painting: '張路《老子騎牛圖》' },
+].map(entry => ({ ...entry, url: `/set-backgrounds/guofeng/${entry.id.slice('guofeng-'.length)}.webp` }));
+
+const findPreset = (background) => {
   const raw = String(background || '');
   if (!raw.startsWith('preset:')) return null;
   const id = raw.slice('preset:'.length);
-  const found = SET_BACKGROUND_THEMES.find(themeEntry => themeEntry.id === id);
-  return found ? found.url : null;
+  return SET_BACKGROUND_THEMES.find(themeEntry => themeEntry.id === id)
+    || BUILT_IN_BACKGROUNDS.find(entry => entry.id === id)
+    || null;
+};
+
+// 'preset:<id>' → URL, or null when unset/unknown (caller falls back to
+// the default rotating AI backgrounds).
+export function getSetBackgroundUrl(background) {
+  return findPreset(background)?.url || null;
 }
 
 // 'preset:<id>' → video URL when the chosen preset is a video background,
 // otherwise null (still image or unset).
 export function getSetBackgroundVideoUrl(background) {
-  const raw = String(background || '');
-  if (!raw.startsWith('preset:')) return null;
-  const id = raw.slice('preset:'.length);
-  const found = SET_BACKGROUND_THEMES.find(themeEntry => themeEntry.id === id);
-  return found?.video || null;
+  return findPreset(background)?.video || null;
 }
