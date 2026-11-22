@@ -13,7 +13,7 @@ import { alignReading, boundaryStrengths, estimateReading, phraseShowTime } from
 import { stripLeadingVerseNumeral } from './lib/bibleTextMarkup.js';
 import { getSpeechLangForVersion, isEnglishBibleVersion as isEnglishLangId } from './lib/speechLang.js';
 import { LANG_OPTIONS, baseLang, annotationOf, uiLangFor, langLabel as langLabelOf, isCantoneseVersion, voiceBucketFor } from './lib/lang.js';
-import { localizeSet, itemZh, itemEn, pickText, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter } from './lib/content.js';
+import { localizeSet, itemZh, itemEn, pickText, isBilingualItem, splitParagraphs, defaultLabel, normalizeItemsForSave, setSimplifiedConverter, hasSimplifiedConverter, translationCredit } from './lib/content.js';
 import Annotated from './Annotated.jsx';
 import { voicedFraction } from './lib/readAlong.js';
 import { createReadAlong } from './lib/readAlongDom.js';
@@ -3384,6 +3384,16 @@ function VerseSetContinuousRainPlayer({
                 </span>
               )}
             </div>
+            {/* The English shown here is someone's translation: name them. */}
+            {(() => {
+              const englishShown = isEnglishBibleVersion(activePrimaryVersion) || (hasSecondaryPhrases && isEnglishBibleVersion(activeSecondaryVersion));
+              const credit = englishShown ? translationCredit(currentVerse?.translation ? currentVerse : secondaryVerse) : '';
+              return credit ? (
+                <div className="continuous-rain-translation-credit" style={{ textAlign: 'center', margin: '-0.2rem 0 0.3rem', fontSize: '0.72rem', color: '#e2e8f0', opacity: 0.85, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+                  {credit}
+                </div>
+              ) : null;
+            })()}
             {voiceLoading && (
               <div style={{ textAlign: 'center', margin: '-0.1rem 0 0.4rem', fontSize: '0.82rem' }}>
                 <span style={{ color: '#93c5fd', fontWeight: 600 }}>⏳ {t('正在載入朗讀…', 'Loading the reading…')}</span>
@@ -10209,7 +10219,7 @@ const zhcnDict = {
                     聽&說
                   </div>
                   <div className="app-brand-version" style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '1px', marginTop: '4px', marginLeft: '2px' }}>
-                    v0.1.20
+                    v0.1.21
                   </div>
                 </div>
                 <div ref={langPickerRef} className="app-lang-control" style={{ position: 'relative' }}>
@@ -15613,6 +15623,13 @@ const zhcnDict = {
                   no scrollbar and the tail of the verse was unreachable. */}
               <div style={{ color: '#475569', fontSize: '1.2rem', lineHeight: '1.8', flex: '1 1 auto', minHeight: 0, overflowY: 'auto', whiteSpace: 'pre-line', WebkitOverflowScrolling: 'touch', paddingRight: '1rem', fontWeight: '500', fontFamily: 'var(--app-font-family)', wordBreak: 'break-word' }}>
                 <span className="ls-on-light"><Annotated text={verseViewModal.text} mode={annotationOf(version)} /></span>
+                {isEnglishBibleVersion(version) && translationCredit(verseViewModal) && (
+                  <div style={{ marginTop: '0.8rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 400 }}>
+                    {verseViewModal.translation?.url
+                      ? <a href={verseViewModal.translation.url} target="_blank" rel="noreferrer" style={{ color: '#64748b' }}>{translationCredit(verseViewModal)}</a>
+                      : translationCredit(verseViewModal)}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', gap: '1rem' }}>
