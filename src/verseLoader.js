@@ -2,7 +2,6 @@
 // the same sets are returned for every language; `localizeSet` picks the side.
 import { TANG_POEM_SETS } from './content/tangPoems.js';
 import { DAODEJING_SETS } from './content/daodejing.js';
-import { withTranslations } from './content/tangTranslations.js';
 
 // Each built-in set shows a classical Chinese painting behind it
 // (see BUILT_IN_BACKGROUNDS in setBackgrounds.js).
@@ -22,6 +21,9 @@ const withBackground = (set) => (BUILT_IN_SET_BACKGROUNDS[set.id] && !set.backgr
   : set);
 
 export const loadLanguageSets = async () => {
+  // The English translations are large; they load as their own file, after
+  // the app itself.
+  const { withTranslations } = await import('./content/tangTranslations.js');
   const sets = [...DAODEJING_SETS, ...TANG_POEM_SETS].map(withBackground).map(withTranslations);
   return { sets, verses: sets.flatMap(s => s.verses) };
 };
